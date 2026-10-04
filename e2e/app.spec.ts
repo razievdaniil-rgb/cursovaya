@@ -20,12 +20,13 @@ test('review form validates and submits', async ({ page }) => {
   await expect(page.getByText('На модерации')).toBeVisible()
 })
 
-test('organization role opens protected cabinet', async ({ page }) => {
+test('organization role opens protected cabinet', async ({ page }, testInfo) => {
   await page.goto('/auth/login')
   await page.getByLabel('Тип учётной записи').selectOption('organization')
   await page.getByRole('button', { name: 'Войти' }).click()
   await expect(page).toHaveURL(/organization/)
   await expect(page.getByRole('heading', { name: 'Кабинет медорганизации' })).toBeVisible()
+  await page.screenshot({ path: testInfo.outputPath('organization-full.png'), fullPage: true })
 })
 
 test('government role opens analytics and sync states', async ({ page }) => {

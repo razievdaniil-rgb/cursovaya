@@ -17,10 +17,15 @@ export function HomePage() {
   const submit = (event: React.FormEvent) => { event.preventDefault(); navigate(`/catalog${search ? `?search=${encodeURIComponent(search)}` : ''}`) }
   return <div className={styles.home}>
     <section className={styles.hero}>
-      <div className={styles.heroCopy}><span className={styles.eyebrow}>ЕДИНЫЙ РЕЕСТР · ДАННЫЕ ОБНОВЛЕНЫ СЕГОДНЯ</span><h1>Выбор медицинских изделий<br/>по данным реестра</h1><p>Регистрация, характеристики, цены, аналоги и опыт применения — в одном проверяемом контуре.</p>
+      <div className={styles.heroCopy}><span className={styles.eyebrow}>КАТАЛОГ · РЕГИСТРАЦИЯ · АНАЛОГИ</span><h1>Выбор медицинских изделий<br/>по данным реестра</h1><p>Регистрация, характеристики, цены, аналоги и опыт применения — в одном проверяемом контуре.</p>
         <form className={styles.heroSearch} onSubmit={submit}><Icon name="search"/><input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Название, производитель или регистрационный номер" aria-label="Поиск изделия"/><button>Найти</button></form>
       </div>
-      <Card className={styles.registryCard}><span>Актуальность реестра</span><strong>98,7%</strong><p>карточек актуальны</p><div className={styles.pulse}><i/><i/><i/><i/><i/></div><b>Последняя загрузка: 09:42</b></Card>
+      <Card className={styles.registryCard}>
+        <header><span>Состояние данных</span><b><i/>Актуальная версия</b></header>
+        <div className={styles.registryMain}><span>Последняя загрузка</span><strong>Сегодня, 09:42</strong><p>Регистрационные сведения обновлены в каталоге</p></div>
+        <div className={styles.registryFacts}><div><span>Изменений</span><strong>14</strong><small>в текущей версии</small></div><div><span>Ошибок</span><strong>0</strong><small>при обработке</small></div></div>
+        <footer><Icon name="shield" size={20}/><span><b>Контроль свежести</b>Показывает, когда сведения проверялись в последний раз</span></footer>
+      </Card>
     </section>
     <section className={styles.homeSection}><h2>Рынок в цифрах</h2><div className={styles.stats}>{stats.map(([label,value,delta]) => <Card className={styles.stat} key={label}><span>{label}</span><strong>{value}</strong><small>{delta}</small></Card>)}</div></section>
     <section className={styles.homeSection}><h2>Популярные категории</h2><div className={styles.categories}>{categories.map((item, index) => <button key={item.name} className={index === 0 ? styles.categoryActive : ''} onClick={() => navigate(`/catalog?search=${encodeURIComponent(item.name)}`)}><span><Icon name={iconMap[item.icon]}/></span><strong>{item.name}</strong><small>{item.count} изделий</small></button>)}</div></section>

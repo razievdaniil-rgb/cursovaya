@@ -1,4 +1,4 @@
-import { BrowserRouter, Navigate, Route, Routes } from 'react-router-dom'
+import { BrowserRouter, Navigate, Route, Routes, useNavigate } from 'react-router-dom'
 import { AppLayout, CabinetLayout } from './components/layout/AppLayout'
 import { ProtectedRoute } from './components/layout/ProtectedRoute'
 import { HomePage } from './pages/HomePage'
@@ -12,10 +12,10 @@ import { SyncPage } from './pages/SyncPage'
 import { LoginPage, RecoveryPage, RegisterPage } from './pages/AuthPages'
 import { Button, EmptyState } from './components/ui/UI'
 
-function NotFound() { return <div style={{ maxWidth: 760, margin: '80px auto', padding: 16 }}><EmptyState title="Страница не найдена" text="Адрес страницы изменён или введён неверно." action={<Button onClick={() => location.assign('/')}>На главную</Button>}/></div> }
+function NotFound() { const navigate = useNavigate(); return <div style={{ maxWidth: 760, margin: '80px auto', padding: 16 }}><EmptyState title="Страница не найдена" text="Адрес страницы изменён или введён неверно." action={<Button onClick={() => navigate('/')}>На главную</Button>}/></div> }
 
 export function AppRouter() {
-  return <BrowserRouter><Routes>
+  return <BrowserRouter basename={import.meta.env.BASE_URL}><Routes>
     <Route element={<AppLayout/>}>
       <Route index element={<HomePage/>}/>
       <Route path="catalog" element={<CatalogPage/>}/>

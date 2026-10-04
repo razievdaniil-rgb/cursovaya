@@ -1,13 +1,14 @@
 import type { AnalyticsSnapshot, Notification, Product, Review, SyncStatus } from '../types'
 
 const manufacturer = (id: string, name: string, city: string, country = 'Россия') => ({ id, name, city, country })
+const publicAsset = (name: string) => `${import.meta.env.BASE_URL}assets/${name}`
 
 export const products: Product[] = [
   {
     id: 'mp-12', name: 'Монитор пациента МП-12', shortName: 'МП-12', category: 'Диагностика', origin: 'Россия',
     manufacturer: manufacturer('medtech', 'АО «Медтехника»', 'Казань'), registrationNumber: 'РЗН 2024/21851', registryStatus: 'active',
     verifiedAt: '10 сентября 2026', riskClass: '2б', priceMin: 284000, priceMax: 319000, rating: 4.8, reviewCount: 128, organizationReviewCount: 74,
-    image: '/assets/product-monitor-main.jpg',
+    image: publicAsset('product-monitor-main.jpg'),
     specs: { 'Каналы ЭКГ': '12', 'Диагональ': '12,1″', 'Автономность': '4 часа', 'Гарантия': '24 месяца', 'Сервисных центров': '32', 'Страна производства': 'Россия' },
     documents: ['Регистрационное удостоверение.pdf', 'Инструкция по применению.pdf', 'Декларация соответствия.pdf'],
   },
@@ -15,7 +16,7 @@ export const products: Product[] = [
     id: 'vector-8', name: 'Кардиомонитор «Вектор-8»', shortName: 'Вектор-8', category: 'Диагностика', origin: 'Россия',
     manufacturer: manufacturer('biosignal', 'НПП «Биосигнал»', 'Москва'), registrationNumber: 'РЗН 2023/19704', registryStatus: 'active',
     verifiedAt: '9 сентября 2026', riskClass: '2б', priceMin: 319000, priceMax: 352000, rating: 4.6, reviewCount: 86, organizationReviewCount: 45,
-    image: '/assets/product-monitor-compact.jpg',
+    image: publicAsset('product-monitor-compact.jpg'),
     specs: { 'Каналы ЭКГ': '8', 'Диагональ': '10,4″', 'Автономность': '5 часов', 'Гарантия': '24 месяца', 'Сервисных центров': '24', 'Страна производства': 'Россия' },
     documents: ['Регистрационное удостоверение.pdf', 'Руководство оператора.pdf'],
   },
@@ -23,7 +24,7 @@ export const products: Product[] = [
     id: 'vismo', name: 'Patient Monitor Vismo', shortName: 'Vismo', category: 'Диагностика', origin: 'Импорт',
     manufacturer: manufacturer('nihon', 'Nihon Kohden', 'Токио', 'Япония'), registrationNumber: 'РЗН 2022/16487', registryStatus: 'active',
     verifiedAt: '8 сентября 2026', riskClass: '2б', priceMin: 512000, priceMax: 590000, rating: 4.9, reviewCount: 164, organizationReviewCount: 91,
-    image: '/assets/product-monitor-premium.jpg',
+    image: publicAsset('product-monitor-premium.jpg'),
     specs: { 'Каналы ЭКГ': '12', 'Диагональ': '12,1″', 'Автономность': '6 часов', 'Гарантия': '12 месяцев', 'Сервисных центров': '11', 'Страна производства': 'Япония' },
     documents: ['Регистрационное удостоверение.pdf', 'Инструкция по применению.pdf'],
   },
@@ -31,7 +32,7 @@ export const products: Product[] = [
     id: 'mitar-01', name: 'Монитор МИТАР-01', shortName: 'МИТАР-01', category: 'Диагностика', origin: 'Россия',
     manufacturer: manufacturer('mitar', 'ООО «МИТАР»', 'Санкт-Петербург'), registrationNumber: 'РЗН 2024/22410', registryStatus: 'changed',
     verifiedAt: '7 сентября 2026', riskClass: '2а', priceMin: 246000, priceMax: 278000, rating: 4.5, reviewCount: 62, organizationReviewCount: 29,
-    image: '/assets/product-monitor-portable.jpg',
+    image: publicAsset('product-monitor-portable.jpg'),
     specs: { 'Каналы ЭКГ': '8', 'Диагональ': '9,7″', 'Автономность': '7 часов', 'Гарантия': '18 месяцев', 'Сервисных центров': '18', 'Страна производства': 'Россия' },
     documents: ['Регистрационное удостоверение.pdf', 'Руководство оператора.pdf'],
   },

@@ -5,6 +5,10 @@ import { ThrottlerModule } from '@nestjs/throttler';
 
 import { AuthModule } from './auth/auth.module';
 import { CatalogModule } from './catalog/catalog.module';
+import { ComparisonsModule } from './comparisons/comparisons.module';
+import { NotificationsModule } from './notifications/notifications.module';
+import { ReviewsModule } from './reviews/reviews.module';
+import { SavedListsModule } from './saved-lists/saved-lists.module';
 import { JwtAuthGuard } from './auth/jwt-auth.guard';
 import { RolesGuard } from './auth/roles.guard';
 import { AppThrottlerGuard } from './common/app-throttler.guard';
@@ -30,6 +34,10 @@ import { PrismaModule } from './prisma/prisma.module';
     PrismaModule,
     AuthModule,
     CatalogModule,
+    ReviewsModule,
+    SavedListsModule,
+    ComparisonsModule,
+    NotificationsModule,
   ],
   controllers: [HealthController],
   providers: [

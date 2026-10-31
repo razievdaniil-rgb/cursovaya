@@ -113,6 +113,33 @@ export const Problems = {
   notFound: (what: string) =>
     problem('not-found', `${what} не найдено`, HttpStatus.NOT_FOUND),
 
+  reviewAlreadyExists: () =>
+    problem(
+      'review-already-exists',
+      'Вы уже оставляли отзыв на это изделие',
+      HttpStatus.CONFLICT,
+      'Отредактируйте существующий отзыв вместо создания нового.',
+    ),
+
+  reviewStatusUnchanged: (code: string) =>
+    problem(
+      'review-status-unchanged',
+      'Отзыв уже находится в этом статусе',
+      HttpStatus.CONFLICT,
+      `Текущий статус — «${code}».`,
+    ),
+
+  comparisonFull: (limit: number) =>
+    problem(
+      'comparison-full',
+      `Для сравнения можно выбрать не более ${limit} изделий`,
+      HttpStatus.CONFLICT,
+      'Удалите одно из изделий, чтобы добавить новое.',
+    ),
+
+  alreadyInCollection: (what: string) =>
+    problem('already-in-collection', `${what} уже добавлено`, HttpStatus.CONFLICT),
+
   invalidResetToken: () =>
     problem(
       'invalid-reset-token',

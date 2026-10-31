@@ -262,11 +262,21 @@ describe('GET /products', () => {
 
     it('rating-desc ставит изделия без отзывов в конец', async () => {
       const result = await get('/products?sort=rating-desc');
-      const names = shortNames(result.body);
+      const items: { shortName: string; rating: { average: number | null } }[] =
+        result.body.data;
 
-      // МП-12 (4.5) выше МИТАР-01 (2.0); без отзывов — последними.
-      expect(names.indexOf('МП-12')).toBeLessThan(names.indexOf('МИТАР-01'));
-      expect(names.slice(-2).sort()).toEqual(['Vismo', 'Вектор-8']);
+      // Проверяется само свойство порядка, а не конкретные позиции изделий:
+      // другие наборы тестов могут публиковать отзывы и менять рейтинги.
+      const rated = items.filter((item) => item.rating.average !== null);
+      const unrated = items.filter((item) => item.rating.average === null);
+
+      // Оценённые идут по убыванию рейтинга.
+      const averages = rated.map((item) => item.rating.average as number);
+      expect(averages).toEqual([...averages].sort((a, b) => b - a));
+
+      // Все изделия без отзывов стоят после оценённых (NULLS LAST).
+      expect(items.slice(0, rated.length)).toEqual(rated);
+      expect(items.slice(rated.length)).toEqual(unrated);
     });
 
     it('name-asc по названию', async () => {

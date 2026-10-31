@@ -85,7 +85,11 @@ docker compose exec api npx tsx prisma/seed.ts
 
 ### Запуск без Docker
 
-Если Docker недоступен, нужен любой PostgreSQL 17. **Важно:** база должна быть
+Если Docker недоступен, нужен любой PostgreSQL 17 — пошаговая инструкция для
+портативной установки без прав администратора есть в
+[backend/docs/local-postgres-without-docker.md](backend/docs/local-postgres-without-docker.md).
+
+**Важно:** база должна быть
 создана с UTF-8-совместимым `lc_ctype` (`C.UTF-8`, `ru-RU` или
 `ru_RU.UTF-8`). При `--locale=C` PostgreSQL не приводит кириллицу к нижнему
 регистру, и полнотекстовый поиск по русским словам молча перестаёт находить

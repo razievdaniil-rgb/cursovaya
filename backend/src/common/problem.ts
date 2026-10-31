@@ -140,6 +140,14 @@ export const Problems = {
   alreadyInCollection: (what: string) =>
     problem('already-in-collection', `${what} уже добавлено`, HttpStatus.CONFLICT),
 
+  syncSourceDisabled: () =>
+    problem(
+      'sync-source-disabled',
+      'Источник данных отключён',
+      HttpStatus.CONFLICT,
+      'Включите источник, прежде чем запускать загрузку.',
+    ),
+
   invalidResetToken: () =>
     problem(
       'invalid-reset-token',

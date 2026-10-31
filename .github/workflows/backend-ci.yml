@@ -1,0 +1,138 @@
+name: Backend CI
+
+# Отдельный workflow: deploy-pages.yml не затрагивается, frontend-сборка и
+# публикация на GitHub Pages продолжают работать независимо от backend.
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'backend/**'
+      - 'docker-compose.yml'
+      - '.github/workflows/backend-ci.yml'
+  pull_request:
+    paths:
+      - 'backend/**'
+      - 'docker-compose.yml'
+      - '.github/workflows/backend-ci.yml'
+  workflow_dispatch:
+
+defaults:
+  run:
+    working-directory: backend
+
+jobs:
+  # Главная проверка этапа: схема применяется на ЧИСТОЙ базе одной командой,
+  # после чего идемпотентный seed выполняется дважды с одинаковым результатом.
+  migrations:
+    name: Миграции и seed на пустом PostgreSQL
+    runs-on: ubuntu-latest
+
+    services:
+      postgres:
+        image: postgres:17
+        env:
+          POSTGRES_DB: medizdeliya_ci
+          POSTGRES_USER: medizdeliya
+          POSTGRES_PASSWORD: medizdeliya_ci
+          # Обязательно: при locale=C русский стемминг не работает (см. docker-compose.yml)
+          POSTGRES_INITDB_ARGS: "--locale=C.UTF-8 --encoding=UTF8"
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U medizdeliya -d medizdeliya_ci"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 20
+
+    env:
+      DATABASE_URL: postgresql://medizdeliya:medizdeliya_ci@localhost:5432/medizdeliya_ci?schema=public
+      SEED_DEV_PASSWORD: ci-only-password-2026
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: backend/package-lock.json
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Применить миграции с нуля
+        run: npm run db:migrate:deploy
+
+      - name: Проверить, что schema.prisma не расходится с миграциями
+        # Пустой diff означает: применённые миграции дают ровно ту схему,
+        # которая описана в schema.prisma.
+        run: |
+          npx prisma migrate diff \
+            --from-schema-datasource prisma/schema.prisma \
+            --to-schema-datamodel prisma/schema.prisma \
+            --exit-code
+
+      - name: Seed
+        run: npm run db:seed
+
+      - name: Проверить ограничения, триггеры и представления
+        # После seed: поведенческие проверки CHECK требуют данных в таблицах.
+        run: npx tsx test/verify-schema-objects.ts
+
+      - name: Seed повторно (проверка идемпотентности)
+        run: npx tsx test/verify-seed-idempotent.ts
+
+  checks:
+    name: Типы, линтер и тесты
+    runs-on: ubuntu-latest
+
+    services:
+      postgres:
+        image: postgres:17
+        env:
+          POSTGRES_DB: medizdeliya_test
+          POSTGRES_USER: medizdeliya
+          POSTGRES_PASSWORD: medizdeliya_ci
+          # Обязательно: при locale=C русский стемминг не работает (см. docker-compose.yml)
+          POSTGRES_INITDB_ARGS: "--locale=C.UTF-8 --encoding=UTF8"
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U medizdeliya -d medizdeliya_test"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 20
+
+    env:
+      DATABASE_URL: postgresql://medizdeliya:medizdeliya_ci@localhost:5432/medizdeliya_test?schema=public
+      JWT_ACCESS_SECRET: ci_only_access_secret_at_least_32_chars_long
+      JWT_REFRESH_SECRET: ci_only_refresh_secret_at_least_32_chars_long
+      FRONTEND_ORIGINS: http://localhost:5173
+      SEED_DEV_PASSWORD: ci-only-password-2026
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: backend/package-lock.json
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Prisma generate
+        run: npm run db:generate
+
+      - name: Подготовить тестовую базу
+        run: npm run db:migrate:deploy && npm run db:seed
+
+      - name: Typecheck
+        run: npm run typecheck
+
+      - name: Lint
+        run: npm run lint
+
+      - name: Unit и integration тесты
+        run: npm run test

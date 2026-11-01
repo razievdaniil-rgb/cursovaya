@@ -1,0 +1,18 @@
+{
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "rootDir": "src",
+    // nest-cli удаляет dist перед сборкой (deleteOutDir), поэтому
+    // инкрементальная сборка по .tsbuildinfo считала бы вывод актуальным и
+    // ничего не компилировала.
+    "incremental": false
+  },
+  "include": ["src/**/*"],
+  "exclude": [
+    "node_modules",
+    "dist",
+    "test",
+    "prisma",
+    "**/*.spec.ts"
+  ]
+}

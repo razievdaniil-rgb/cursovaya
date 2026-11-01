@@ -1,0 +1,4278 @@
+{
+  "openapi": "3.0.0",
+  "paths": {
+    "/api/v1/health": {
+      "get": {
+        "operationId": "HealthController_check",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "summary": "Проверка готовности API и БД",
+        "tags": [
+          "health"
+        ]
+      }
+    },
+    "/api/v1/auth/register": {
+      "post": {
+        "description": "Доступные для самостоятельного выбора роли — user и organization. Роли government и admin выдаёт администратор платформы.",
+        "operationId": "AuthController_register",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "email": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 254,
+                    "format": "email"
+                  },
+                  "password": {
+                    "type": "string",
+                    "minLength": 10,
+                    "maxLength": 256
+                  },
+                  "displayName": {
+                    "type": "string",
+                    "minLength": 2,
+                    "maxLength": 255
+                  },
+                  "role": {
+                    "type": "string",
+                    "enum": [
+                      "user",
+                      "organization"
+                    ],
+                    "default": "user"
+                  },
+                  "organizationName": {
+                    "type": "string",
+                    "minLength": 3,
+                    "maxLength": 512
+                  },
+                  "organizationInn": {
+                    "type": "string",
+                    "pattern": "^(\\d{10}|\\d{12})$"
+                  }
+                },
+                "required": [
+                  "email",
+                  "password",
+                  "displayName"
+                ],
+                "additionalProperties": false
+              }
+            }
+          }
+        },
+        "responses": {
+          "409": {
+            "description": "Адрес электронной почты уже зарегистрирован",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "type",
+                    "title",
+                    "status"
+                  ],
+                  "properties": {
+                    "type": {
+                      "type": "string",
+                      "format": "uri",
+                      "example": "https://medizdeliya.local/problems/validation-failed"
+                    },
+                    "title": {
+                      "type": "string",
+                      "example": "Некорректные данные запроса"
+                    },
+                    "status": {
+                      "type": "integer",
+                      "example": 409
+                    },
+                    "detail": {
+                      "type": "string"
+                    },
+                    "instance": {
+                      "type": "string"
+                    },
+                    "requestId": {
+                      "type": "string",
+                      "format": "uuid"
+                    },
+                    "errors": {
+                      "type": "object",
+                      "description": "Сообщения по полям; присутствует при 422.",
+                      "additionalProperties": {
+                        "type": "array",
+                        "items": {
+                          "type": "string"
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Некорректные данные или недоступная роль",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "type",
+                    "title",
+                    "status"
+                  ],
+                  "properties": {
+                    "type": {
+                      "type": "string",
+                      "format": "uri",
+                      "example": "https://medizdeliya.local/problems/validation-failed"
+                    },
+                    "title": {
+                      "type": "string",
+                      "example": "Некорректные данные запроса"
+                    },
+                    "status": {
+                      "type": "integer",
+                      "example": 422
+                    },
+                    "detail": {
+                      "type": "string"
+                    },
+                    "instance": {
+                      "type": "string"
+                    },
+                    "requestId": {
+                      "type": "string",
+                      "format": "uuid"
+                    },
+                    "errors": {
+                      "type": "object",
+                      "description": "Сообщения по полям; присутствует при 422.",
+                      "additionalProperties": {
+                        "type": "array",
+                        "items": {
+                          "type": "string"
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Превышен лимит запросов",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "type",
+                    "title",
+                    "status"
+                  ],
+                  "properties": {
+                    "type": {
+                      "type": "string",
+                      "format": "uri",
+                      "example": "https://medizdeliya.local/problems/validation-failed"
+                    },
+                    "title": {
+                      "type": "string",
+                      "example": "Некорректные данные запроса"
+                    },
+                    "status": {
+                      "type": "integer",
+                      "example": 429
+                    },
+                    "detail": {
+                      "type": "string"
+                    },
+                    "instance": {
+                      "type": "string"
+                    },
+                    "requestId": {
+                      "type": "string",
+                      "format": "uuid"
+                    },
+                    "errors": {
+                      "type": "object",
+                      "description": "Сообщения по полям; присутствует при 422.",
+                      "additionalProperties": {
+                        "type": "array",
+                        "items": {
+                          "type": "string"
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "summary": "Регистрация",
+        "tags": [
+          "auth"
+        ]
+      }
+    },
+    "/api/v1/auth/login": {
+      "post": {
+        "operationId": "AuthController_login",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "email": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 254,
+                    "format": "email"
+                  },
+                  "password": {
+                    "type": "string",
+                    "minLength": 1
+                  }
+                },
+                "required": [
+                  "email",
+                  "password"
+                ],
+                "additionalProperties": false
+              }
+            }
+          }
+        },
+        "responses": {
+          "401": {
+            "description": "Неверный адрес или пароль",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "type",
+                    "title",
+                    "status"
+                  ],
+                  "properties": {
+                    "type": {
+                      "type": "string",
+                      "format": "uri",
+                      "example": "https://medizdeliya.local/problems/validation-failed"
+                    },
+                    "title": {
+                      "type": "string",
+                      "example": "Некорректные данные запроса"
+                    },
+                    "status": {
+                      "type": "integer",
+                      "example": 401
+                    },
+                    "detail": {
+                      "type": "string"
+                    },
+                    "instance": {
+                      "type": "string"
+                    },
+                    "requestId": {
+                      "type": "string",
+                      "format": "uuid"
+                    },
+                    "errors": {
+                      "type": "object",
+                      "description": "Сообщения по полям; присутствует при 422.",
+                      "additionalProperties": {
+                        "type": "array",
+                        "items": {
+                          "type": "string"
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Учётная запись заблокирована",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "type",
+                    "title",
+                    "status"
+                  ],
+                  "properties": {
+                    "type": {
+                      "type": "string",
+                      "format": "uri",
+                      "example": "https://medizdeliya.local/problems/validation-failed"
+                    },
+                    "title": {
+                      "type": "string",
+                      "example": "Некорректные данные запроса"
+                    },
+                    "status": {
+                      "type": "integer",
+                      "example": 403
+                    },
+                    "detail": {
+                      "type": "string"
+                    },
+                    "instance": {
+                      "type": "string"
+                    },
+                    "requestId": {
+                      "type": "string",
+                      "format": "uuid"
+                    },
+                    "errors": {
+                      "type": "object",
+                      "description": "Сообщения по полям; присутствует при 422.",
+                      "additionalProperties": {
+                        "type": "array",
+                        "items": {
+                          "type": "string"
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Превышен лимит запросов",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "type",
+                    "title",
+                    "status"
+                  ],
+                  "properties": {
+                    "type": {
+                      "type": "string",
+                      "format": "uri",
+                      "example": "https://medizdeliya.local/problems/validation-failed"
+                    },
+                    "title": {
+                      "type": "string",
+                      "example": "Некорректные данные запроса"
+                    },
+                    "status": {
+                      "type": "integer",
+                      "example": 429
+                    },
+                    "detail": {
+                      "type": "string"
+                    },
+                    "instance": {
+                      "type": "string"
+                    },
+                    "requestId": {
+                      "type": "string",
+                      "format": "uuid"
+                    },
+                    "errors": {
+                      "type": "object",
+                      "description": "Сообщения по полям; присутствует при 422.",
+                      "additionalProperties": {
+                        "type": "array",
+                        "items": {
+                          "type": "string"
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "summary": "Вход",
+        "tags": [
+          "auth"
+        ]
+      }
+    },
+    "/api/v1/auth/refresh": {
+      "post": {
+        "description": "Токен читается из HttpOnly-cookie. Повторное предъявление уже использованного токена отзывает все сессии пользователя.",
+        "operationId": "AuthController_refresh",
+        "parameters": [],
+        "responses": {
+          "401": {
+            "description": "Токен недействителен или использован повторно",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "type",
+                    "title",
+                    "status"
+                  ],
+                  "properties": {
+                    "type": {
+                      "type": "string",
+                      "format": "uri",
+                      "example": "https://medizdeliya.local/problems/validation-failed"
+                    },
+                    "title": {
+                      "type": "string",
+                      "example": "Некорректные данные запроса"
+                    },
+                    "status": {
+                      "type": "integer",
+                      "example": 401
+                    },
+                    "detail": {
+                      "type": "string"
+                    },
+                    "instance": {
+                      "type": "string"
+                    },
+                    "requestId": {
+                      "type": "string",
+                      "format": "uuid"
+                    },
+                    "errors": {
+                      "type": "object",
+                      "description": "Сообщения по полям; присутствует при 422.",
+                      "additionalProperties": {
+                        "type": "array",
+                        "items": {
+                          "type": "string"
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "summary": "Ротация refresh token",
+        "tags": [
+          "auth"
+        ]
+      }
+    },
+    "/api/v1/auth/logout": {
+      "post": {
+        "operationId": "AuthController_logout",
+        "parameters": [],
+        "responses": {
+          "204": {
+            "description": ""
+          }
+        },
+        "summary": "Выход",
+        "tags": [
+          "auth"
+        ]
+      }
+    },
+    "/api/v1/auth/recovery/request": {
+      "post": {
+        "description": "Всегда отвечает одинаково, независимо от наличия учётной записи, чтобы не раскрывать зарегистрированные адреса.",
+        "operationId": "AuthController_requestRecovery",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "email": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 254,
+                    "format": "email"
+                  }
+                },
+                "required": [
+                  "email"
+                ],
+                "additionalProperties": false
+              }
+            }
+          }
+        },
+        "responses": {
+          "429": {
+            "description": "Превышен лимит запросов",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "type",
+                    "title",
+                    "status"
+                  ],
+                  "properties": {
+                    "type": {
+                      "type": "string",
+                      "format": "uri",
+                      "example": "https://medizdeliya.local/problems/validation-failed"
+                    },
+                    "title": {
+                      "type": "string",
+                      "example": "Некорректные данные запроса"
+                    },
+                    "status": {
+                      "type": "integer",
+                      "example": 429
+                    },
+                    "detail": {
+                      "type": "string"
+                    },
+                    "instance": {
+                      "type": "string"
+                    },
+                    "requestId": {
+                      "type": "string",
+                      "format": "uuid"
+                    },
+                    "errors": {
+                      "type": "object",
+                      "description": "Сообщения по полям; присутствует при 422.",
+                      "additionalProperties": {
+                        "type": "array",
+                        "items": {
+                          "type": "string"
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "summary": "Запрос восстановления пароля",
+        "tags": [
+          "auth"
+        ]
+      }
+    },
+    "/api/v1/auth/recovery/confirm": {
+      "post": {
+        "operationId": "AuthController_confirmRecovery",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "token": {
+                    "type": "string",
+                    "minLength": 16
+                  },
+                  "password": {
+                    "type": "string",
+                    "minLength": 10,
+                    "maxLength": 256
+                  }
+                },
+                "required": [
+                  "token",
+                  "password"
+                ],
+                "additionalProperties": false
+              }
+            }
+          }
+        },
+        "responses": {
+          "400": {
+            "description": "Ссылка восстановления недействительна или истекла",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "type",
+                    "title",
+                    "status"
+                  ],
+                  "properties": {
+                    "type": {
+                      "type": "string",
+                      "format": "uri",
+                      "example": "https://medizdeliya.local/problems/validation-failed"
+                    },
+                    "title": {
+                      "type": "string",
+                      "example": "Некорректные данные запроса"
+                    },
+                    "status": {
+                      "type": "integer",
+                      "example": 400
+                    },
+                    "detail": {
+                      "type": "string"
+                    },
+                    "instance": {
+                      "type": "string"
+                    },
+                    "requestId": {
+                      "type": "string",
+                      "format": "uuid"
+                    },
+                    "errors": {
+                      "type": "object",
+                      "description": "Сообщения по полям; присутствует при 422.",
+                      "additionalProperties": {
+                        "type": "array",
+                        "items": {
+                          "type": "string"
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "summary": "Подтверждение нового пароля",
+        "tags": [
+          "auth"
+        ]
+      }
+    },
+    "/api/v1/auth/me": {
+      "get": {
+        "description": "Источник истины о сессии вместо localStorage.",
+        "operationId": "AuthController_me",
+        "parameters": [],
+        "responses": {
+          "401": {
+            "description": "Требуется авторизация",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "type",
+                    "title",
+                    "status"
+                  ],
+                  "properties": {
+                    "type": {
+                      "type": "string",
+                      "format": "uri",
+                      "example": "https://medizdeliya.local/problems/validation-failed"
+                    },
+                    "title": {
+                      "type": "string",
+                      "example": "Некорректные данные запроса"
+                    },
+                    "status": {
+                      "type": "integer",
+                      "example": 401
+                    },
+                    "detail": {
+                      "type": "string"
+                    },
+                    "instance": {
+                      "type": "string"
+                    },
+                    "requestId": {
+                      "type": "string",
+                      "format": "uuid"
+                    },
+                    "errors": {
+                      "type": "object",
+                      "description": "Сообщения по полям; присутствует при 422.",
+                      "additionalProperties": {
+                        "type": "array",
+                        "items": {
+                          "type": "string"
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "summary": "Текущий пользователь",
+        "tags": [
+          "auth"
+        ]
+      }
+    },
+    "/api/v1/catalog/filters": {
+      "get": {
+        "description": "Счётчики считаются из таблиц при запросе, поэтому всегда совпадают с фактическим составом каталога.",
+        "operationId": "CatalogController_filters",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "summary": "Справочники и счётчики для панели фильтров",
+        "tags": [
+          "catalog"
+        ]
+      }
+    },
+    "/api/v1/products": {
+      "get": {
+        "description": "Фильтры: search, categorySlug, categoryId, manufacturerId, countryIso2, status, riskClass, originType, priceMin, priceMax. Пагинация page/limit. Повторяющиеся параметры и значения через запятую равнозначны.",
+        "operationId": "ProductsController_list",
+        "parameters": [
+          {
+            "name": "search",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "maxLength": 256
+            }
+          },
+          {
+            "name": "categorySlug",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "array",
+                  "items": {
+                    "type": "string"
+                  }
+                }
+              ]
+            }
+          },
+          {
+            "name": "categoryId",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "array",
+                  "items": {
+                    "type": "string"
+                  }
+                }
+              ]
+            }
+          },
+          {
+            "name": "manufacturerId",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "array",
+                  "items": {
+                    "type": "string"
+                  }
+                }
+              ]
+            }
+          },
+          {
+            "name": "countryIso2",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "array",
+                  "items": {
+                    "type": "string"
+                  }
+                }
+              ]
+            }
+          },
+          {
+            "name": "status",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "array",
+                  "items": {
+                    "type": "string"
+                  }
+                }
+              ]
+            }
+          },
+          {
+            "name": "riskClass",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "array",
+                  "items": {
+                    "type": "string"
+                  }
+                }
+              ]
+            }
+          },
+          {
+            "name": "originType",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "array",
+                  "items": {
+                    "type": "string"
+                  }
+                }
+              ]
+            }
+          },
+          {
+            "name": "priceMin",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "type": "number",
+              "minimum": 0
+            }
+          },
+          {
+            "name": "priceMax",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "type": "number",
+              "minimum": 0
+            }
+          },
+          {
+            "name": "sort",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "recommended",
+                "price-asc",
+                "price-desc",
+                "rating-desc",
+                "name-asc",
+                "newest"
+              ],
+              "default": "recommended"
+            }
+          },
+          {
+            "name": "page",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "exclusiveMinimum": true,
+              "minimum": 0,
+              "default": 1
+            }
+          },
+          {
+            "name": "limit",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "exclusiveMinimum": true,
+              "minimum": 0,
+              "maximum": 100,
+              "default": 20
+            }
+          }
+        ],
+        "responses": {
+          "422": {
+            "description": "Некорректные параметры фильтра",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "type",
+                    "title",
+                    "status"
+                  ],
+                  "properties": {
+                    "type": {
+                      "type": "string",
+                      "format": "uri",
+                      "example": "https://medizdeliya.local/problems/validation-failed"
+                    },
+                    "title": {
+                      "type": "string",
+                      "example": "Некорректные данные запроса"
+                    },
+                    "status": {
+                      "type": "integer",
+                      "example": 422
+                    },
+                    "detail": {
+                      "type": "string"
+                    },
+                    "instance": {
+                      "type": "string"
+                    },
+                    "requestId": {
+                      "type": "string",
+                      "format": "uuid"
+                    },
+                    "errors": {
+                      "type": "object",
+                      "description": "Сообщения по полям; присутствует при 422.",
+                      "additionalProperties": {
+                        "type": "array",
+                        "items": {
+                          "type": "string"
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "summary": "Список изделий",
+        "tags": [
+          "catalog"
+        ]
+      }
+    },
+    "/api/v1/products/{id}": {
+      "get": {
+        "description": "Характеристики возвращаются типизированными значениями с единицей измерения, а не единым JSON-объектом.",
+        "operationId": "ProductsController_detail",
+        "parameters": [],
+        "responses": {
+          "404": {
+            "description": "Изделие не найдено",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "type",
+                    "title",
+                    "status"
+                  ],
+                  "properties": {
+                    "type": {
+                      "type": "string",
+                      "format": "uri",
+                      "example": "https://medizdeliya.local/problems/validation-failed"
+                    },
+                    "title": {
+                      "type": "string",
+                      "example": "Некорректные данные запроса"
+                    },
+                    "status": {
+                      "type": "integer",
+                      "example": 404
+                    },
+                    "detail": {
+                      "type": "string"
+                    },
+                    "instance": {
+                      "type": "string"
+                    },
+                    "requestId": {
+                      "type": "string",
+                      "format": "uuid"
+                    },
+                    "errors": {
+                      "type": "object",
+                      "description": "Сообщения по полям; присутствует при 422.",
+                      "additionalProperties": {
+                        "type": "array",
+                        "items": {
+                          "type": "string"
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Некорректный идентификатор",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "type",
+                    "title",
+                    "status"
+                  ],
+                  "properties": {
+                    "type": {
+                      "type": "string",
+                      "format": "uri",
+                      "example": "https://medizdeliya.local/problems/validation-failed"
+                    },
+                    "title": {
+                      "type": "string",
+                      "example": "Некорректные данные запроса"
+                    },
+                    "status": {
+                      "type": "integer",
+                      "example": 422
+                    },
+                    "detail": {
+                      "type": "string"
+                    },
+                    "instance": {
+                      "type": "string"
+                    },
+                    "requestId": {
+                      "type": "string",
+                      "format": "uuid"
+                    },
+                    "errors": {
+                      "type": "object",
+                      "description": "Сообщения по полям; присутствует при 422.",
+                      "additionalProperties": {
+                        "type": "array",
+                        "items": {
+                          "type": "string"
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "summary": "Карточка изделия",
+        "tags": [
+          "catalog"
+        ]
+      }
+    },
+    "/api/v1/products/{id}/analogues": {
+      "get": {
+        "operationId": "ProductsController_analogues",
+        "parameters": [],
+        "responses": {
+          "404": {
+            "description": "Изделие не найдено",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "type",
+                    "title",
+                    "status"
+                  ],
+                  "properties": {
+                    "type": {
+                      "type": "string",
+                      "format": "uri",
+                      "example": "https://medizdeliya.local/problems/validation-failed"
+                    },
+                    "title": {
+                      "type": "string",
+                      "example": "Некорректные данные запроса"
+                    },
+                    "status": {
+                      "type": "integer",
+                      "example": 404
+                    },
+                    "detail": {
+                      "type": "string"
+                    },
+                    "instance": {
+                      "type": "string"
+                    },
+                    "requestId": {
+                      "type": "string",
+                      "format": "uuid"
+                    },
+                    "errors": {
+                      "type": "object",
+                      "description": "Сообщения по полям; присутствует при 422.",
+                      "additionalProperties": {
+                        "type": "array",
+                        "items": {
+                          "type": "string"
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "summary": "Аналоги изделия",
+        "tags": [
+          "catalog"
+        ]
+      }
+    },
+    "/api/v1/products/{id}/reviews": {
+      "get": {
+        "description": "Бейдж verifiedOrganization вычисляется из текущего статуса верификации организации автора.",
+        "operationId": "ProductsController_reviews",
+        "parameters": [
+          {
+            "name": "page",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "exclusiveMinimum": true,
+              "minimum": 0,
+              "default": 1
+            }
+          },
+          {
+            "name": "limit",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "exclusiveMinimum": true,
+              "minimum": 0,
+              "maximum": 100,
+              "default": 20
+            }
+          }
+        ],
+        "responses": {
+          "404": {
+            "description": "Изделие не найдено",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "type",
+                    "title",
+                    "status"
+                  ],
+                  "properties": {
+                    "type": {
+                      "type": "string",
+                      "format": "uri",
+                      "example": "https://medizdeliya.local/problems/validation-failed"
+                    },
+                    "title": {
+                      "type": "string",
+                      "example": "Некорректные данные запроса"
+                    },
+                    "status": {
+                      "type": "integer",
+                      "example": 404
+                    },
+                    "detail": {
+                      "type": "string"
+                    },
+                    "instance": {
+                      "type": "string"
+                    },
+                    "requestId": {
+                      "type": "string",
+                      "format": "uuid"
+                    },
+                    "errors": {
+                      "type": "object",
+                      "description": "Сообщения по полям; присутствует при 422.",
+                      "additionalProperties": {
+                        "type": "array",
+                        "items": {
+                          "type": "string"
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "summary": "Опубликованные отзывы изделия",
+        "tags": [
+          "catalog"
+        ]
+      },
+      "post": {
+        "description": "Отзыв создаётся в статусе moderation. Статус и бейдж подтверждённой организации от клиента не принимаются.",
+        "operationId": "ReviewsController_create",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "rating": {
+                    "type": "integer",
+                    "minimum": 1,
+                    "maximum": 5
+                  },
+                  "title": {
+                    "type": "string",
+                    "minLength": 3,
+                    "maxLength": 255
+                  },
+                  "body": {
+                    "type": "string",
+                    "minLength": 10,
+                    "maxLength": 8000
+                  },
+                  "experience": {
+                    "type": "string",
+                    "minLength": 1
+                  },
+                  "organizationId": {
+                    "type": "string",
+                    "format": "uuid"
+                  }
+                },
+                "required": [
+                  "rating",
+                  "title",
+                  "body",
+                  "experience"
+                ],
+                "additionalProperties": false
+              }
+            }
+          }
+        },
+        "responses": {
+          "401": {
+            "description": "Требуется авторизация",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "type",
+                    "title",
+                    "status"
+                  ],
+                  "properties": {
+                    "type": {
+                      "type": "string",
+                      "format": "uri",
+                      "example": "https://medizdeliya.local/problems/validation-failed"
+                    },
+                    "title": {
+                      "type": "string",
+                      "example": "Некорректные данные запроса"
+                    },
+                    "status": {
+                      "type": "integer",
+                      "example": 401
+                    },
+                    "detail": {
+                      "type": "string"
+                    },
+                    "instance": {
+                      "type": "string"
+                    },
+                    "requestId": {
+                      "type": "string",
+                      "format": "uuid"
+                    },
+                    "errors": {
+                      "type": "object",
+                      "description": "Сообщения по полям; присутствует при 422.",
+                      "additionalProperties": {
+                        "type": "array",
+                        "items": {
+                          "type": "string"
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Нет доступа к указанной организации",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "type",
+                    "title",
+                    "status"
+                  ],
+                  "properties": {
+                    "type": {
+                      "type": "string",
+                      "format": "uri",
+                      "example": "https://medizdeliya.local/problems/validation-failed"
+                    },
+                    "title": {
+                      "type": "string",
+                      "example": "Некорректные данные запроса"
+                    },
+                    "status": {
+                      "type": "integer",
+                      "example": 403
+                    },
+                    "detail": {
+                      "type": "string"
+                    },
+                    "instance": {
+                      "type": "string"
+                    },
+                    "requestId": {
+                      "type": "string",
+                      "format": "uuid"
+                    },
+                    "errors": {
+                      "type": "object",
+                      "description": "Сообщения по полям; присутствует при 422.",
+                      "additionalProperties": {
+                        "type": "array",
+                        "items": {
+                          "type": "string"
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Изделие не найдено",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "type",
+                    "title",
+                    "status"
+                  ],
+                  "properties": {
+                    "type": {
+                      "type": "string",
+                      "format": "uri",
+                      "example": "https://medizdeliya.local/problems/validation-failed"
+                    },
+                    "title": {
+                      "type": "string",
+                      "example": "Некорректные данные запроса"
+                    },
+                    "status": {
+                      "type": "integer",
+                      "example": 404
+                    },
+                    "detail": {
+                      "type": "string"
+                    },
+                    "instance": {
+                      "type": "string"
+                    },
+                    "requestId": {
+                      "type": "string",
+                      "format": "uuid"
+                    },
+                    "errors": {
+                      "type": "object",
+                      "description": "Сообщения по полям; присутствует при 422.",
+                      "additionalProperties": {
+                        "type": "array",
+                        "items": {
+                          "type": "string"
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Отзыв на это изделие уже оставлен",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "type",
+                    "title",
+                    "status"
+                  ],
+                  "properties": {
+                    "type": {
+                      "type": "string",
+                      "format": "uri",
+                      "example": "https://medizdeliya.local/problems/validation-failed"
+                    },
+                    "title": {
+                      "type": "string",
+                      "example": "Некорректные данные запроса"
+                    },
+                    "status": {
+                      "type": "integer",
+                      "example": 409
+                    },
+                    "detail": {
+                      "type": "string"
+                    },
+                    "instance": {
+                      "type": "string"
+                    },
+                    "requestId": {
+                      "type": "string",
+                      "format": "uuid"
+                    },
+                    "errors": {
+                      "type": "object",
+                      "description": "Сообщения по полям; присутствует при 422.",
+                      "additionalProperties": {
+                        "type": "array",
+                        "items": {
+                          "type": "string"
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Некорректные данные отзыва",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "type",
+                    "title",
+                    "status"
+                  ],
+                  "properties": {
+                    "type": {
+                      "type": "string",
+                      "format": "uri",
+                      "example": "https://medizdeliya.local/problems/validation-failed"
+                    },
+                    "title": {
+                      "type": "string",
+                      "example": "Некорректные данные запроса"
+                    },
+                    "status": {
+                      "type": "integer",
+                      "example": 422
+                    },
+                    "detail": {
+                      "type": "string"
+                    },
+                    "instance": {
+                      "type": "string"
+                    },
+                    "requestId": {
+                      "type": "string",
+                      "format": "uuid"
+                    },
+                    "errors": {
+                      "type": "object",
+                      "description": "Сообщения по полям; присутствует при 422.",
+                      "additionalProperties": {
+                        "type": "array",
+                        "items": {
+                          "type": "string"
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Создать отзыв",
+        "tags": [
+          "reviews"
+        ]
+      }
+    },
+    "/api/v1/products/{id}/documents": {
+      "get": {
+        "operationId": "ProductsController_documents",
+        "parameters": [],
+        "responses": {
+          "404": {
+            "description": "Изделие не найдено",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "type",
+                    "title",
+                    "status"
+                  ],
+                  "properties": {
+                    "type": {
+                      "type": "string",
+                      "format": "uri",
+                      "example": "https://medizdeliya.local/problems/validation-failed"
+                    },
+                    "title": {
+                      "type": "string",
+                      "example": "Некорректные данные запроса"
+                    },
+                    "status": {
+                      "type": "integer",
+                      "example": 404
+                    },
+                    "detail": {
+                      "type": "string"
+                    },
+                    "instance": {
+                      "type": "string"
+                    },
+                    "requestId": {
+                      "type": "string",
+                      "format": "uuid"
+                    },
+                    "errors": {
+                      "type": "object",
+                      "description": "Сообщения по полям; присутствует при 422.",
+                      "additionalProperties": {
+                        "type": "array",
+                        "items": {
+                          "type": "string"
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "summary": "Документы изделия",
+        "tags": [
+          "catalog"
+        ]
+      }
+    },
+    "/api/v1/me/reviews": {
+      "get": {
+        "operationId": "ReviewsController_mine",
+        "parameters": [
+          {
+            "name": "status",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "page",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "exclusiveMinimum": true,
+              "minimum": 0,
+              "default": 1
+            }
+          },
+          {
+            "name": "limit",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "exclusiveMinimum": true,
+              "minimum": 0,
+              "maximum": 100,
+              "default": 20
+            }
+          }
+        ],
+        "responses": {
+          "401": {
+            "description": "Требуется авторизация",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "type",
+                    "title",
+                    "status"
+                  ],
+                  "properties": {
+                    "type": {
+                      "type": "string",
+                      "format": "uri",
+                      "example": "https://medizdeliya.local/problems/validation-failed"
+                    },
+                    "title": {
+                      "type": "string",
+                      "example": "Некорректные данные запроса"
+                    },
+                    "status": {
+                      "type": "integer",
+                      "example": 401
+                    },
+                    "detail": {
+                      "type": "string"
+                    },
+                    "instance": {
+                      "type": "string"
+                    },
+                    "requestId": {
+                      "type": "string",
+                      "format": "uuid"
+                    },
+                    "errors": {
+                      "type": "object",
+                      "description": "Сообщения по полям; присутствует при 422.",
+                      "additionalProperties": {
+                        "type": "array",
+                        "items": {
+                          "type": "string"
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Мои отзывы, включая находящиеся на модерации",
+        "tags": [
+          "reviews"
+        ]
+      }
+    },
+    "/api/v1/admin/reviews": {
+      "get": {
+        "operationId": "ReviewsController_queue",
+        "parameters": [
+          {
+            "name": "status",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "page",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "exclusiveMinimum": true,
+              "minimum": 0,
+              "default": 1
+            }
+          },
+          {
+            "name": "limit",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "exclusiveMinimum": true,
+              "minimum": 0,
+              "maximum": 100,
+              "default": 20
+            }
+          }
+        ],
+        "responses": {
+          "403": {
+            "description": "Требуется роль admin",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "type",
+                    "title",
+                    "status"
+                  ],
+                  "properties": {
+                    "type": {
+                      "type": "string",
+                      "format": "uri",
+                      "example": "https://medizdeliya.local/problems/validation-failed"
+                    },
+                    "title": {
+                      "type": "string",
+                      "example": "Некорректные данные запроса"
+                    },
+                    "status": {
+                      "type": "integer",
+                      "example": 403
+                    },
+                    "detail": {
+                      "type": "string"
+                    },
+                    "instance": {
+                      "type": "string"
+                    },
+                    "requestId": {
+                      "type": "string",
+                      "format": "uuid"
+                    },
+                    "errors": {
+                      "type": "object",
+                      "description": "Сообщения по полям; присутствует при 422.",
+                      "additionalProperties": {
+                        "type": "array",
+                        "items": {
+                          "type": "string"
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Очередь модерации",
+        "tags": [
+          "reviews"
+        ]
+      }
+    },
+    "/api/v1/admin/reviews/{id}/status": {
+      "patch": {
+        "description": "Обновление статуса и запись в review_moderation_events выполняются одной транзакцией.",
+        "operationId": "ReviewsController_moderate",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "status": {
+                    "type": "string",
+                    "enum": [
+                      "published",
+                      "rejected",
+                      "hidden",
+                      "moderation"
+                    ]
+                  },
+                  "comment": {
+                    "type": "string",
+                    "maxLength": 1024
+                  }
+                },
+                "required": [
+                  "status"
+                ],
+                "additionalProperties": false
+              }
+            }
+          }
+        },
+        "responses": {
+          "403": {
+            "description": "Требуется роль admin",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "type",
+                    "title",
+                    "status"
+                  ],
+                  "properties": {
+                    "type": {
+                      "type": "string",
+                      "format": "uri",
+                      "example": "https://medizdeliya.local/problems/validation-failed"
+                    },
+                    "title": {
+                      "type": "string",
+                      "example": "Некорректные данные запроса"
+                    },
+                    "status": {
+                      "type": "integer",
+                      "example": 403
+                    },
+                    "detail": {
+                      "type": "string"
+                    },
+                    "instance": {
+                      "type": "string"
+                    },
+                    "requestId": {
+                      "type": "string",
+                      "format": "uuid"
+                    },
+                    "errors": {
+                      "type": "object",
+                      "description": "Сообщения по полям; присутствует при 422.",
+                      "additionalProperties": {
+                        "type": "array",
+                        "items": {
+                          "type": "string"
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Отзыв не найден",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "type",
+                    "title",
+                    "status"
+                  ],
+                  "properties": {
+                    "type": {
+                      "type": "string",
+                      "format": "uri",
+                      "example": "https://medizdeliya.local/problems/validation-failed"
+                    },
+                    "title": {
+                      "type": "string",
+                      "example": "Некорректные данные запроса"
+                    },
+                    "status": {
+                      "type": "integer",
+                      "example": 404
+                    },
+                    "detail": {
+                      "type": "string"
+                    },
+                    "instance": {
+                      "type": "string"
+                    },
+                    "requestId": {
+                      "type": "string",
+                      "format": "uuid"
+                    },
+                    "errors": {
+                      "type": "object",
+                      "description": "Сообщения по полям; присутствует при 422.",
+                      "additionalProperties": {
+                        "type": "array",
+                        "items": {
+                          "type": "string"
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Отзыв уже находится в этом статусе",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "type",
+                    "title",
+                    "status"
+                  ],
+                  "properties": {
+                    "type": {
+                      "type": "string",
+                      "format": "uri",
+                      "example": "https://medizdeliya.local/problems/validation-failed"
+                    },
+                    "title": {
+                      "type": "string",
+                      "example": "Некорректные данные запроса"
+                    },
+                    "status": {
+                      "type": "integer",
+                      "example": 409
+                    },
+                    "detail": {
+                      "type": "string"
+                    },
+                    "instance": {
+                      "type": "string"
+                    },
+                    "requestId": {
+                      "type": "string",
+                      "format": "uuid"
+                    },
+                    "errors": {
+                      "type": "object",
+                      "description": "Сообщения по полям; присутствует при 422.",
+                      "additionalProperties": {
+                        "type": "array",
+                        "items": {
+                          "type": "string"
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Сменить статус отзыва",
+        "tags": [
+          "reviews"
+        ]
+      }
+    },
+    "/api/v1/admin/reviews/{id}/history": {
+      "get": {
+        "operationId": "ReviewsController_history",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "История модерации отзыва",
+        "tags": [
+          "reviews"
+        ]
+      }
+    },
+    "/api/v1/saved-lists": {
+      "get": {
+        "operationId": "SavedListsController_list",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Мои списки сохранённых изделий",
+        "tags": [
+          "saved-lists"
+        ]
+      },
+      "post": {
+        "operationId": "SavedListsController_create",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "name": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 255
+                  },
+                  "organizationId": {
+                    "type": "string",
+                    "format": "uuid"
+                  }
+                },
+                "required": [
+                  "name"
+                ],
+                "additionalProperties": false
+              }
+            }
+          }
+        },
+        "responses": {
+          "401": {
+            "description": "Требуется авторизация",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "type",
+                    "title",
+                    "status"
+                  ],
+                  "properties": {
+                    "type": {
+                      "type": "string",
+                      "format": "uri",
+                      "example": "https://medizdeliya.local/problems/validation-failed"
+                    },
+                    "title": {
+                      "type": "string",
+                      "example": "Некорректные данные запроса"
+                    },
+                    "status": {
+                      "type": "integer",
+                      "example": 401
+                    },
+                    "detail": {
+                      "type": "string"
+                    },
+                    "instance": {
+                      "type": "string"
+                    },
+                    "requestId": {
+                      "type": "string",
+                      "format": "uuid"
+                    },
+                    "errors": {
+                      "type": "object",
+                      "description": "Сообщения по полям; присутствует при 422.",
+                      "additionalProperties": {
+                        "type": "array",
+                        "items": {
+                          "type": "string"
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Нет доступа к указанной организации",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "type",
+                    "title",
+                    "status"
+                  ],
+                  "properties": {
+                    "type": {
+                      "type": "string",
+                      "format": "uri",
+                      "example": "https://medizdeliya.local/problems/validation-failed"
+                    },
+                    "title": {
+                      "type": "string",
+                      "example": "Некорректные данные запроса"
+                    },
+                    "status": {
+                      "type": "integer",
+                      "example": 403
+                    },
+                    "detail": {
+                      "type": "string"
+                    },
+                    "instance": {
+                      "type": "string"
+                    },
+                    "requestId": {
+                      "type": "string",
+                      "format": "uuid"
+                    },
+                    "errors": {
+                      "type": "object",
+                      "description": "Сообщения по полям; присутствует при 422.",
+                      "additionalProperties": {
+                        "type": "array",
+                        "items": {
+                          "type": "string"
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Создать список",
+        "tags": [
+          "saved-lists"
+        ]
+      }
+    },
+    "/api/v1/saved-lists/{listId}": {
+      "get": {
+        "operationId": "SavedListsController_detail",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Список с актуальными карточками изделий",
+        "tags": [
+          "saved-lists"
+        ]
+      },
+      "patch": {
+        "operationId": "SavedListsController_update",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "name": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 255
+                  },
+                  "organizationId": {
+                    "type": "string",
+                    "format": "uuid",
+                    "nullable": true
+                  }
+                },
+                "additionalProperties": false
+              }
+            }
+          }
+        },
+        "responses": {
+          "404": {
+            "description": "Список не найден",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "type",
+                    "title",
+                    "status"
+                  ],
+                  "properties": {
+                    "type": {
+                      "type": "string",
+                      "format": "uri",
+                      "example": "https://medizdeliya.local/problems/validation-failed"
+                    },
+                    "title": {
+                      "type": "string",
+                      "example": "Некорректные данные запроса"
+                    },
+                    "status": {
+                      "type": "integer",
+                      "example": 404
+                    },
+                    "detail": {
+                      "type": "string"
+                    },
+                    "instance": {
+                      "type": "string"
+                    },
+                    "requestId": {
+                      "type": "string",
+                      "format": "uuid"
+                    },
+                    "errors": {
+                      "type": "object",
+                      "description": "Сообщения по полям; присутствует при 422.",
+                      "additionalProperties": {
+                        "type": "array",
+                        "items": {
+                          "type": "string"
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Переименовать список или привязать к организации",
+        "tags": [
+          "saved-lists"
+        ]
+      },
+      "delete": {
+        "operationId": "SavedListsController_remove",
+        "parameters": [],
+        "responses": {
+          "204": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Удалить список",
+        "tags": [
+          "saved-lists"
+        ]
+      }
+    },
+    "/api/v1/saved-lists/{listId}/products/{productId}": {
+      "post": {
+        "operationId": "SavedListsController_addProduct",
+        "parameters": [],
+        "responses": {
+          "404": {
+            "description": "Список или изделие не найдены",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "type",
+                    "title",
+                    "status"
+                  ],
+                  "properties": {
+                    "type": {
+                      "type": "string",
+                      "format": "uri",
+                      "example": "https://medizdeliya.local/problems/validation-failed"
+                    },
+                    "title": {
+                      "type": "string",
+                      "example": "Некорректные данные запроса"
+                    },
+                    "status": {
+                      "type": "integer",
+                      "example": 404
+                    },
+                    "detail": {
+                      "type": "string"
+                    },
+                    "instance": {
+                      "type": "string"
+                    },
+                    "requestId": {
+                      "type": "string",
+                      "format": "uuid"
+                    },
+                    "errors": {
+                      "type": "object",
+                      "description": "Сообщения по полям; присутствует при 422.",
+                      "additionalProperties": {
+                        "type": "array",
+                        "items": {
+                          "type": "string"
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Изделие уже в списке",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "type",
+                    "title",
+                    "status"
+                  ],
+                  "properties": {
+                    "type": {
+                      "type": "string",
+                      "format": "uri",
+                      "example": "https://medizdeliya.local/problems/validation-failed"
+                    },
+                    "title": {
+                      "type": "string",
+                      "example": "Некорректные данные запроса"
+                    },
+                    "status": {
+                      "type": "integer",
+                      "example": 409
+                    },
+                    "detail": {
+                      "type": "string"
+                    },
+                    "instance": {
+                      "type": "string"
+                    },
+                    "requestId": {
+                      "type": "string",
+                      "format": "uuid"
+                    },
+                    "errors": {
+                      "type": "object",
+                      "description": "Сообщения по полям; присутствует при 422.",
+                      "additionalProperties": {
+                        "type": "array",
+                        "items": {
+                          "type": "string"
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Добавить изделие в список",
+        "tags": [
+          "saved-lists"
+        ]
+      },
+      "delete": {
+        "operationId": "SavedListsController_removeProduct",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Убрать изделие из списка",
+        "tags": [
+          "saved-lists"
+        ]
+      }
+    },
+    "/api/v1/comparisons": {
+      "get": {
+        "operationId": "ComparisonsController_list",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Мои сравнения",
+        "tags": [
+          "comparisons"
+        ]
+      },
+      "post": {
+        "operationId": "ComparisonsController_create",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "name": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 255
+                  }
+                },
+                "additionalProperties": false
+              }
+            }
+          }
+        },
+        "responses": {
+          "401": {
+            "description": "Требуется авторизация",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "type",
+                    "title",
+                    "status"
+                  ],
+                  "properties": {
+                    "type": {
+                      "type": "string",
+                      "format": "uri",
+                      "example": "https://medizdeliya.local/problems/validation-failed"
+                    },
+                    "title": {
+                      "type": "string",
+                      "example": "Некорректные данные запроса"
+                    },
+                    "status": {
+                      "type": "integer",
+                      "example": 401
+                    },
+                    "detail": {
+                      "type": "string"
+                    },
+                    "instance": {
+                      "type": "string"
+                    },
+                    "requestId": {
+                      "type": "string",
+                      "format": "uuid"
+                    },
+                    "errors": {
+                      "type": "object",
+                      "description": "Сообщения по полям; присутствует при 422.",
+                      "additionalProperties": {
+                        "type": "array",
+                        "items": {
+                          "type": "string"
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Создать сравнение",
+        "tags": [
+          "comparisons"
+        ]
+      }
+    },
+    "/api/v1/comparisons/{comparisonId}": {
+      "get": {
+        "description": "comparableCharacteristics содержит по строке на характеристику с пометкой is_comparable и значением каждого изделия.",
+        "operationId": "ComparisonsController_detail",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Сравнение с матрицей характеристик",
+        "tags": [
+          "comparisons"
+        ]
+      },
+      "patch": {
+        "operationId": "ComparisonsController_update",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "name": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 255,
+                    "nullable": true
+                  }
+                },
+                "additionalProperties": false
+              }
+            }
+          }
+        },
+        "responses": {
+          "404": {
+            "description": "Сравнение не найдено",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "type",
+                    "title",
+                    "status"
+                  ],
+                  "properties": {
+                    "type": {
+                      "type": "string",
+                      "format": "uri",
+                      "example": "https://medizdeliya.local/problems/validation-failed"
+                    },
+                    "title": {
+                      "type": "string",
+                      "example": "Некорректные данные запроса"
+                    },
+                    "status": {
+                      "type": "integer",
+                      "example": 404
+                    },
+                    "detail": {
+                      "type": "string"
+                    },
+                    "instance": {
+                      "type": "string"
+                    },
+                    "requestId": {
+                      "type": "string",
+                      "format": "uuid"
+                    },
+                    "errors": {
+                      "type": "object",
+                      "description": "Сообщения по полям; присутствует при 422.",
+                      "additionalProperties": {
+                        "type": "array",
+                        "items": {
+                          "type": "string"
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Переименовать сравнение",
+        "tags": [
+          "comparisons"
+        ]
+      },
+      "delete": {
+        "operationId": "ComparisonsController_remove",
+        "parameters": [],
+        "responses": {
+          "204": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Удалить сравнение",
+        "tags": [
+          "comparisons"
+        ]
+      }
+    },
+    "/api/v1/comparisons/{comparisonId}/products/{productId}": {
+      "post": {
+        "description": "Не более трёх изделий. Добавление выполняется в транзакции с блокировкой строки сравнения, поэтому конкурентные запросы не могут превысить лимит.",
+        "operationId": "ComparisonsController_addProduct",
+        "parameters": [],
+        "responses": {
+          "404": {
+            "description": "Сравнение или изделие не найдены",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "type",
+                    "title",
+                    "status"
+                  ],
+                  "properties": {
+                    "type": {
+                      "type": "string",
+                      "format": "uri",
+                      "example": "https://medizdeliya.local/problems/validation-failed"
+                    },
+                    "title": {
+                      "type": "string",
+                      "example": "Некорректные данные запроса"
+                    },
+                    "status": {
+                      "type": "integer",
+                      "example": 404
+                    },
+                    "detail": {
+                      "type": "string"
+                    },
+                    "instance": {
+                      "type": "string"
+                    },
+                    "requestId": {
+                      "type": "string",
+                      "format": "uuid"
+                    },
+                    "errors": {
+                      "type": "object",
+                      "description": "Сообщения по полям; присутствует при 422.",
+                      "additionalProperties": {
+                        "type": "array",
+                        "items": {
+                          "type": "string"
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Достигнут предел в три изделия либо изделие уже добавлено",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "type",
+                    "title",
+                    "status"
+                  ],
+                  "properties": {
+                    "type": {
+                      "type": "string",
+                      "format": "uri",
+                      "example": "https://medizdeliya.local/problems/validation-failed"
+                    },
+                    "title": {
+                      "type": "string",
+                      "example": "Некорректные данные запроса"
+                    },
+                    "status": {
+                      "type": "integer",
+                      "example": 409
+                    },
+                    "detail": {
+                      "type": "string"
+                    },
+                    "instance": {
+                      "type": "string"
+                    },
+                    "requestId": {
+                      "type": "string",
+                      "format": "uuid"
+                    },
+                    "errors": {
+                      "type": "object",
+                      "description": "Сообщения по полям; присутствует при 422.",
+                      "additionalProperties": {
+                        "type": "array",
+                        "items": {
+                          "type": "string"
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Добавить изделие в сравнение",
+        "tags": [
+          "comparisons"
+        ]
+      },
+      "delete": {
+        "operationId": "ComparisonsController_removeProduct",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Убрать изделие из сравнения",
+        "tags": [
+          "comparisons"
+        ]
+      }
+    },
+    "/api/v1/me/notifications": {
+      "get": {
+        "description": "meta.unreadCount всегда считает все непрочитанные, а не только на странице.",
+        "operationId": "NotificationsController_list",
+        "parameters": [
+          {
+            "name": "unreadOnly",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "true",
+                "false"
+              ]
+            }
+          },
+          {
+            "name": "page",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "exclusiveMinimum": true,
+              "minimum": 0,
+              "default": 1
+            }
+          },
+          {
+            "name": "limit",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "exclusiveMinimum": true,
+              "minimum": 0,
+              "maximum": 100,
+              "default": 20
+            }
+          }
+        ],
+        "responses": {
+          "401": {
+            "description": "Требуется авторизация",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "type",
+                    "title",
+                    "status"
+                  ],
+                  "properties": {
+                    "type": {
+                      "type": "string",
+                      "format": "uri",
+                      "example": "https://medizdeliya.local/problems/validation-failed"
+                    },
+                    "title": {
+                      "type": "string",
+                      "example": "Некорректные данные запроса"
+                    },
+                    "status": {
+                      "type": "integer",
+                      "example": 401
+                    },
+                    "detail": {
+                      "type": "string"
+                    },
+                    "instance": {
+                      "type": "string"
+                    },
+                    "requestId": {
+                      "type": "string",
+                      "format": "uuid"
+                    },
+                    "errors": {
+                      "type": "object",
+                      "description": "Сообщения по полям; присутствует при 422.",
+                      "additionalProperties": {
+                        "type": "array",
+                        "items": {
+                          "type": "string"
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Мои уведомления",
+        "tags": [
+          "notifications"
+        ]
+      }
+    },
+    "/api/v1/me/notifications/{id}/read": {
+      "patch": {
+        "operationId": "NotificationsController_markRead",
+        "parameters": [],
+        "responses": {
+          "404": {
+            "description": "Уведомление не найдено",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "type",
+                    "title",
+                    "status"
+                  ],
+                  "properties": {
+                    "type": {
+                      "type": "string",
+                      "format": "uri",
+                      "example": "https://medizdeliya.local/problems/validation-failed"
+                    },
+                    "title": {
+                      "type": "string",
+                      "example": "Некорректные данные запроса"
+                    },
+                    "status": {
+                      "type": "integer",
+                      "example": 404
+                    },
+                    "detail": {
+                      "type": "string"
+                    },
+                    "instance": {
+                      "type": "string"
+                    },
+                    "requestId": {
+                      "type": "string",
+                      "format": "uuid"
+                    },
+                    "errors": {
+                      "type": "object",
+                      "description": "Сообщения по полям; присутствует при 422.",
+                      "additionalProperties": {
+                        "type": "array",
+                        "items": {
+                          "type": "string"
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Отметить уведомление прочитанным",
+        "tags": [
+          "notifications"
+        ]
+      }
+    },
+    "/api/v1/me/notifications/read-all": {
+      "patch": {
+        "operationId": "NotificationsController_markAllRead",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Отметить все уведомления прочитанными",
+        "tags": [
+          "notifications"
+        ]
+      }
+    },
+    "/api/v1/organization/dashboard": {
+      "get": {
+        "description": "Счётчики читаются из organization_dashboard_view. Если пользователь состоит в нескольких организациях, укажите ?organizationId=.",
+        "operationId": "OrganizationsController_dashboard",
+        "parameters": [],
+        "responses": {
+          "401": {
+            "description": "Требуется авторизация",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "type",
+                    "title",
+                    "status"
+                  ],
+                  "properties": {
+                    "type": {
+                      "type": "string",
+                      "format": "uri",
+                      "example": "https://medizdeliya.local/problems/validation-failed"
+                    },
+                    "title": {
+                      "type": "string",
+                      "example": "Некорректные данные запроса"
+                    },
+                    "status": {
+                      "type": "integer",
+                      "example": 401
+                    },
+                    "detail": {
+                      "type": "string"
+                    },
+                    "instance": {
+                      "type": "string"
+                    },
+                    "requestId": {
+                      "type": "string",
+                      "format": "uuid"
+                    },
+                    "errors": {
+                      "type": "object",
+                      "description": "Сообщения по полям; присутствует при 422.",
+                      "additionalProperties": {
+                        "type": "array",
+                        "items": {
+                          "type": "string"
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Нет доступа к этой организации",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "type",
+                    "title",
+                    "status"
+                  ],
+                  "properties": {
+                    "type": {
+                      "type": "string",
+                      "format": "uri",
+                      "example": "https://medizdeliya.local/problems/validation-failed"
+                    },
+                    "title": {
+                      "type": "string",
+                      "example": "Некорректные данные запроса"
+                    },
+                    "status": {
+                      "type": "integer",
+                      "example": 403
+                    },
+                    "detail": {
+                      "type": "string"
+                    },
+                    "instance": {
+                      "type": "string"
+                    },
+                    "requestId": {
+                      "type": "string",
+                      "format": "uuid"
+                    },
+                    "errors": {
+                      "type": "object",
+                      "description": "Сообщения по полям; присутствует при 422.",
+                      "additionalProperties": {
+                        "type": "array",
+                        "items": {
+                          "type": "string"
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Сводка кабинета",
+        "tags": [
+          "organization"
+        ]
+      }
+    },
+    "/api/v1/organization/members": {
+      "get": {
+        "operationId": "OrganizationsController_members",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Сотрудники организации",
+        "tags": [
+          "organization"
+        ]
+      }
+    },
+    "/api/v1/organization/notifications": {
+      "get": {
+        "description": "Уведомления адресуются пользователю, поэтому список совпадает с /me/notifications; эндпоинт дополнительно требует членства в организации.",
+        "operationId": "OrganizationsController_notificationList",
+        "parameters": [
+          {
+            "name": "unreadOnly",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "true",
+                "false"
+              ]
+            }
+          },
+          {
+            "name": "page",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "exclusiveMinimum": true,
+              "minimum": 0,
+              "default": 1
+            }
+          },
+          {
+            "name": "limit",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "exclusiveMinimum": true,
+              "minimum": 0,
+              "maximum": 100,
+              "default": 20
+            }
+          }
+        ],
+        "responses": {
+          "403": {
+            "description": "Нет доступа к этой организации",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "type",
+                    "title",
+                    "status"
+                  ],
+                  "properties": {
+                    "type": {
+                      "type": "string",
+                      "format": "uri",
+                      "example": "https://medizdeliya.local/problems/validation-failed"
+                    },
+                    "title": {
+                      "type": "string",
+                      "example": "Некорректные данные запроса"
+                    },
+                    "status": {
+                      "type": "integer",
+                      "example": 403
+                    },
+                    "detail": {
+                      "type": "string"
+                    },
+                    "instance": {
+                      "type": "string"
+                    },
+                    "requestId": {
+                      "type": "string",
+                      "format": "uuid"
+                    },
+                    "errors": {
+                      "type": "object",
+                      "description": "Сообщения по полям; присутствует при 422.",
+                      "additionalProperties": {
+                        "type": "array",
+                        "items": {
+                          "type": "string"
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Уведомления сотрудника организации",
+        "tags": [
+          "organization"
+        ]
+      }
+    },
+    "/api/v1/organization/notifications/{id}/read": {
+      "patch": {
+        "operationId": "OrganizationsController_markRead",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Отметить уведомление прочитанным",
+        "tags": [
+          "organization"
+        ]
+      }
+    },
+    "/api/v1/nomenclature": {
+      "get": {
+        "description": "Поиск по названию, описанию и коду. Фильтр sectionNumber включает подразделы: «12.08» вернёт и «12.08.05».",
+        "operationId": "NomenclatureController_list",
+        "parameters": [
+          {
+            "name": "search",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "maxLength": 256
+            }
+          },
+          {
+            "name": "sectionNumber",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "pattern": "^[\\d.]{1,32}$"
+            }
+          },
+          {
+            "name": "page",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "exclusiveMinimum": true,
+              "minimum": 0,
+              "default": 1
+            }
+          },
+          {
+            "name": "limit",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "exclusiveMinimum": true,
+              "minimum": 0,
+              "maximum": 100,
+              "default": 20
+            }
+          }
+        ],
+        "responses": {
+          "422": {
+            "description": "Некорректные параметры запроса",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "type",
+                    "title",
+                    "status"
+                  ],
+                  "properties": {
+                    "type": {
+                      "type": "string",
+                      "format": "uri",
+                      "example": "https://medizdeliya.local/problems/validation-failed"
+                    },
+                    "title": {
+                      "type": "string",
+                      "example": "Некорректные данные запроса"
+                    },
+                    "status": {
+                      "type": "integer",
+                      "example": 422
+                    },
+                    "detail": {
+                      "type": "string"
+                    },
+                    "instance": {
+                      "type": "string"
+                    },
+                    "requestId": {
+                      "type": "string",
+                      "format": "uuid"
+                    },
+                    "errors": {
+                      "type": "object",
+                      "description": "Сообщения по полям; присутствует при 422.",
+                      "additionalProperties": {
+                        "type": "array",
+                        "items": {
+                          "type": "string"
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "summary": "Виды медицинских изделий",
+        "tags": [
+          "nomenclature"
+        ]
+      }
+    },
+    "/api/v1/nomenclature/summary": {
+      "get": {
+        "operationId": "NomenclatureController_summary",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "summary": "Сводка по классификации и последней загрузке",
+        "tags": [
+          "nomenclature"
+        ]
+      }
+    },
+    "/api/v1/nomenclature/sections": {
+      "get": {
+        "description": "Разделы возвращаются деревом; вложенность задана parent_id.",
+        "operationId": "NomenclatureController_sections",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "summary": "Дерево разделов классификации",
+        "tags": [
+          "nomenclature"
+        ]
+      }
+    },
+    "/api/v1/nomenclature/{code}": {
+      "get": {
+        "description": "sectionPaths содержит полные пути разделов, восстановленные обходом дерева: в базе хранится только самый глубокий раздел каждого пути.",
+        "operationId": "NomenclatureController_detail",
+        "parameters": [],
+        "responses": {
+          "404": {
+            "description": "Вид медицинского изделия не найден",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "type",
+                    "title",
+                    "status"
+                  ],
+                  "properties": {
+                    "type": {
+                      "type": "string",
+                      "format": "uri",
+                      "example": "https://medizdeliya.local/problems/validation-failed"
+                    },
+                    "title": {
+                      "type": "string",
+                      "example": "Некорректные данные запроса"
+                    },
+                    "status": {
+                      "type": "integer",
+                      "example": 404
+                    },
+                    "detail": {
+                      "type": "string"
+                    },
+                    "instance": {
+                      "type": "string"
+                    },
+                    "requestId": {
+                      "type": "string",
+                      "format": "uuid"
+                    },
+                    "errors": {
+                      "type": "object",
+                      "description": "Сообщения по полям; присутствует при 422.",
+                      "additionalProperties": {
+                        "type": "array",
+                        "items": {
+                          "type": "string"
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Некорректный код вида",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "type",
+                    "title",
+                    "status"
+                  ],
+                  "properties": {
+                    "type": {
+                      "type": "string",
+                      "format": "uri",
+                      "example": "https://medizdeliya.local/problems/validation-failed"
+                    },
+                    "title": {
+                      "type": "string",
+                      "example": "Некорректные данные запроса"
+                    },
+                    "status": {
+                      "type": "integer",
+                      "example": 422
+                    },
+                    "detail": {
+                      "type": "string"
+                    },
+                    "instance": {
+                      "type": "string"
+                    },
+                    "requestId": {
+                      "type": "string",
+                      "format": "uuid"
+                    },
+                    "errors": {
+                      "type": "object",
+                      "description": "Сообщения по полям; присутствует при 422.",
+                      "additionalProperties": {
+                        "type": "array",
+                        "items": {
+                          "type": "string"
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "summary": "Вид по коду классификации",
+        "tags": [
+          "nomenclature"
+        ]
+      }
+    },
+    "/api/v1/government/analytics": {
+      "get": {
+        "description": "Читаются из materialized views. Поле refreshedAt показывает, когда кэш был обновлён последний раз.",
+        "operationId": "GovernmentController_snapshot",
+        "parameters": [
+          {
+            "name": "period",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "pattern": "^\\d{4}$"
+            }
+          },
+          {
+            "name": "categoryId",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "403": {
+            "description": "Требуется роль government",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "type",
+                    "title",
+                    "status"
+                  ],
+                  "properties": {
+                    "type": {
+                      "type": "string",
+                      "format": "uri",
+                      "example": "https://medizdeliya.local/problems/validation-failed"
+                    },
+                    "title": {
+                      "type": "string",
+                      "example": "Некорректные данные запроса"
+                    },
+                    "status": {
+                      "type": "integer",
+                      "example": 403
+                    },
+                    "detail": {
+                      "type": "string"
+                    },
+                    "instance": {
+                      "type": "string"
+                    },
+                    "requestId": {
+                      "type": "string",
+                      "format": "uuid"
+                    },
+                    "errors": {
+                      "type": "object",
+                      "description": "Сообщения по полям; присутствует при 422.",
+                      "additionalProperties": {
+                        "type": "array",
+                        "items": {
+                          "type": "string"
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Некорректный период или идентификатор категории",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "type",
+                    "title",
+                    "status"
+                  ],
+                  "properties": {
+                    "type": {
+                      "type": "string",
+                      "format": "uri",
+                      "example": "https://medizdeliya.local/problems/validation-failed"
+                    },
+                    "title": {
+                      "type": "string",
+                      "example": "Некорректные данные запроса"
+                    },
+                    "status": {
+                      "type": "integer",
+                      "example": 422
+                    },
+                    "detail": {
+                      "type": "string"
+                    },
+                    "instance": {
+                      "type": "string"
+                    },
+                    "requestId": {
+                      "type": "string",
+                      "format": "uuid"
+                    },
+                    "errors": {
+                      "type": "object",
+                      "description": "Сообщения по полям; присутствует при 422.",
+                      "additionalProperties": {
+                        "type": "array",
+                        "items": {
+                          "type": "string"
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Аналитические показатели",
+        "tags": [
+          "government"
+        ]
+      }
+    },
+    "/api/v1/government/analytics/refresh": {
+      "post": {
+        "operationId": "GovernmentController_refresh",
+        "parameters": [],
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Обновить кэш аналитики",
+        "tags": [
+          "government"
+        ]
+      }
+    },
+    "/api/v1/government/problem-products": {
+      "get": {
+        "description": "Истекающая или приостановленная регистрация, критические отзывы, отсутствие действующих предложений. Критерии вычисляются запросом.",
+        "operationId": "GovernmentController_problemProducts",
+        "parameters": [
+          {
+            "name": "page",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "exclusiveMinimum": true,
+              "minimum": 0,
+              "default": 1
+            }
+          },
+          {
+            "name": "limit",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "exclusiveMinimum": true,
+              "minimum": 0,
+              "maximum": 100,
+              "default": 20
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Проблемные изделия",
+        "tags": [
+          "government"
+        ]
+      }
+    },
+    "/api/v1/government/sync": {
+      "get": {
+        "description": "source.isReal = false означает, что внешний государственный реестр не подключён и данные демонстрационные.",
+        "operationId": "GovernmentController_syncStatus",
+        "parameters": [
+          {
+            "name": "limit",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "exclusiveMinimum": true,
+              "minimum": 0,
+              "maximum": 100,
+              "default": 20
+            }
+          },
+          {
+            "name": "source",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "mock-registry",
+                "roszdravnadzor-registry",
+                "roszdravnadzor-nomenclature"
+              ]
+            }
+          }
+        ],
+        "responses": {
+          "403": {
+            "description": "Требуется роль government",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "type",
+                    "title",
+                    "status"
+                  ],
+                  "properties": {
+                    "type": {
+                      "type": "string",
+                      "format": "uri",
+                      "example": "https://medizdeliya.local/problems/validation-failed"
+                    },
+                    "title": {
+                      "type": "string",
+                      "example": "Некорректные данные запроса"
+                    },
+                    "status": {
+                      "type": "integer",
+                      "example": 403
+                    },
+                    "detail": {
+                      "type": "string"
+                    },
+                    "instance": {
+                      "type": "string"
+                    },
+                    "requestId": {
+                      "type": "string",
+                      "format": "uuid"
+                    },
+                    "errors": {
+                      "type": "object",
+                      "description": "Сообщения по полям; присутствует при 422.",
+                      "additionalProperties": {
+                        "type": "array",
+                        "items": {
+                          "type": "string"
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Журнал загрузок",
+        "tags": [
+          "government"
+        ]
+      }
+    },
+    "/api/v1/government/sync/registry/run": {
+      "post": {
+        "description": "Настоящий источник: публичный REST API Росздравнадзора. В ответе source.isReal = true. Параметр maxPages ограничивает объём загрузки.",
+        "operationId": "GovernmentController_runRegistrySync",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "pageSize": {
+                    "type": "integer",
+                    "exclusiveMinimum": true,
+                    "minimum": 0,
+                    "maximum": 1000,
+                    "default": 500
+                  },
+                  "maxPages": {
+                    "type": "integer",
+                    "exclusiveMinimum": true,
+                    "minimum": 0,
+                    "maximum": 1000
+                  }
+                },
+                "additionalProperties": false
+              }
+            }
+          }
+        },
+        "responses": {
+          "403": {
+            "description": "Требуется роль government",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "type",
+                    "title",
+                    "status"
+                  ],
+                  "properties": {
+                    "type": {
+                      "type": "string",
+                      "format": "uri",
+                      "example": "https://medizdeliya.local/problems/validation-failed"
+                    },
+                    "title": {
+                      "type": "string",
+                      "example": "Некорректные данные запроса"
+                    },
+                    "status": {
+                      "type": "integer",
+                      "example": 403
+                    },
+                    "detail": {
+                      "type": "string"
+                    },
+                    "instance": {
+                      "type": "string"
+                    },
+                    "requestId": {
+                      "type": "string",
+                      "format": "uuid"
+                    },
+                    "errors": {
+                      "type": "object",
+                      "description": "Сообщения по полям; присутствует при 422.",
+                      "additionalProperties": {
+                        "type": "array",
+                        "items": {
+                          "type": "string"
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "502": {
+            "description": "Реестр недоступен",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "type",
+                    "title",
+                    "status"
+                  ],
+                  "properties": {
+                    "type": {
+                      "type": "string",
+                      "format": "uri",
+                      "example": "https://medizdeliya.local/problems/validation-failed"
+                    },
+                    "title": {
+                      "type": "string",
+                      "example": "Некорректные данные запроса"
+                    },
+                    "status": {
+                      "type": "integer",
+                      "example": 502
+                    },
+                    "detail": {
+                      "type": "string"
+                    },
+                    "instance": {
+                      "type": "string"
+                    },
+                    "requestId": {
+                      "type": "string",
+                      "format": "uuid"
+                    },
+                    "errors": {
+                      "type": "object",
+                      "description": "Сообщения по полям; присутствует при 422.",
+                      "additionalProperties": {
+                        "type": "array",
+                        "items": {
+                          "type": "string"
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Загрузить государственный реестр медицинских изделий",
+        "tags": [
+          "government"
+        ]
+      }
+    },
+    "/api/v1/government/sync/nomenclature/run": {
+      "post": {
+        "description": "Настоящий источник: публичный набор Росздравнадзора. В ответе source.isReal = true — в отличие от демонстрационного реестра изделий. Расхождения источника с его схемой попадают в журнал загрузок.",
+        "operationId": "GovernmentController_runNomenclatureSync",
+        "parameters": [],
+        "responses": {
+          "403": {
+            "description": "Требуется роль government",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "type",
+                    "title",
+                    "status"
+                  ],
+                  "properties": {
+                    "type": {
+                      "type": "string",
+                      "format": "uri",
+                      "example": "https://medizdeliya.local/problems/validation-failed"
+                    },
+                    "title": {
+                      "type": "string",
+                      "example": "Некорректные данные запроса"
+                    },
+                    "status": {
+                      "type": "integer",
+                      "example": 403
+                    },
+                    "detail": {
+                      "type": "string"
+                    },
+                    "instance": {
+                      "type": "string"
+                    },
+                    "requestId": {
+                      "type": "string",
+                      "format": "uuid"
+                    },
+                    "errors": {
+                      "type": "object",
+                      "description": "Сообщения по полям; присутствует при 422.",
+                      "additionalProperties": {
+                        "type": "array",
+                        "items": {
+                          "type": "string"
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "502": {
+            "description": "Источник открытых данных недоступен",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "type",
+                    "title",
+                    "status"
+                  ],
+                  "properties": {
+                    "type": {
+                      "type": "string",
+                      "format": "uri",
+                      "example": "https://medizdeliya.local/problems/validation-failed"
+                    },
+                    "title": {
+                      "type": "string",
+                      "example": "Некорректные данные запроса"
+                    },
+                    "status": {
+                      "type": "integer",
+                      "example": 502
+                    },
+                    "detail": {
+                      "type": "string"
+                    },
+                    "instance": {
+                      "type": "string"
+                    },
+                    "requestId": {
+                      "type": "string",
+                      "format": "uuid"
+                    },
+                    "errors": {
+                      "type": "object",
+                      "description": "Сообщения по полям; присутствует при 422.",
+                      "additionalProperties": {
+                        "type": "array",
+                        "items": {
+                          "type": "string"
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Загрузить номенклатурную классификацию из открытых данных",
+        "tags": [
+          "government"
+        ]
+      }
+    },
+    "/api/v1/government/sync/runs/{runId}/errors": {
+      "get": {
+        "operationId": "GovernmentController_runErrors",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Ошибки конкретного запуска загрузки",
+        "tags": [
+          "government"
+        ]
+      }
+    },
+    "/api/v1/government/sync/run": {
+      "post": {
+        "description": "Создаёт запуск MockRegistryProvider. Ответ содержит source.isReal = false: запуск не выдаётся за обращение к реальному API.",
+        "operationId": "GovernmentController_runSync",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "scenario": {
+                    "type": "string",
+                    "enum": [
+                      "success",
+                      "partial",
+                      "failed"
+                    ],
+                    "default": "success"
+                  }
+                },
+                "additionalProperties": false
+              }
+            }
+          }
+        },
+        "responses": {
+          "403": {
+            "description": "Требуется роль government",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "type",
+                    "title",
+                    "status"
+                  ],
+                  "properties": {
+                    "type": {
+                      "type": "string",
+                      "format": "uri",
+                      "example": "https://medizdeliya.local/problems/validation-failed"
+                    },
+                    "title": {
+                      "type": "string",
+                      "example": "Некорректные данные запроса"
+                    },
+                    "status": {
+                      "type": "integer",
+                      "example": 403
+                    },
+                    "detail": {
+                      "type": "string"
+                    },
+                    "instance": {
+                      "type": "string"
+                    },
+                    "requestId": {
+                      "type": "string",
+                      "format": "uuid"
+                    },
+                    "errors": {
+                      "type": "object",
+                      "description": "Сообщения по полям; присутствует при 422.",
+                      "additionalProperties": {
+                        "type": "array",
+                        "items": {
+                          "type": "string"
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Источник данных отключён",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "type",
+                    "title",
+                    "status"
+                  ],
+                  "properties": {
+                    "type": {
+                      "type": "string",
+                      "format": "uri",
+                      "example": "https://medizdeliya.local/problems/validation-failed"
+                    },
+                    "title": {
+                      "type": "string",
+                      "example": "Некорректные данные запроса"
+                    },
+                    "status": {
+                      "type": "integer",
+                      "example": 409
+                    },
+                    "detail": {
+                      "type": "string"
+                    },
+                    "instance": {
+                      "type": "string"
+                    },
+                    "requestId": {
+                      "type": "string",
+                      "format": "uuid"
+                    },
+                    "errors": {
+                      "type": "object",
+                      "description": "Сообщения по полям; присутствует при 422.",
+                      "additionalProperties": {
+                        "type": "array",
+                        "items": {
+                          "type": "string"
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Запустить загрузку из демонстрационного источника",
+        "tags": [
+          "government"
+        ]
+      }
+    }
+  },
+  "info": {
+    "title": "Медицинские изделия России — API",
+    "description": "HTTP API платформы медицинских изделий.\n\nУспешные ответы имеют форму { data, meta? }. Каталог возвращает page, limit,\ntotal и totalPages. Ошибки — RFC 9457, application/problem+json.\n\nAccess token передаётся заголовком Authorization: Bearer и действует 15 минут.\nRefresh token хранится в HttpOnly-cookie, меняется при каждом обмене; повторное\nиспользование отзывает сессии пользователя. Роли government и admin нельзя\nполучить самостоятельной регистрацией. Восстановление пароля требует настройки\nRECOVERY_EMAIL_* и RECOVERY_RESET_URL; без доставки API возвращает 503.\n\nВнешние источники: публичный реестр Росздравнадзора и открытая номенклатурная\nклассификация. Локальный mock-registry обозначен isReal=false. Выбор источника\nжурнала: GET /government/sync?source=roszdravnadzor-registry. Запуск реестра\nвозвращает 202 после создания записи запуска; прогресс читается из журнала.\nОтсутствующие в источнике страна, категория, происхождение и класс риска\nвозвращаются пустыми: эти значения не выводятся из названий и адресов.\n\nПовторный незавершённый запуск одного источника запрещён. При аварийном\nзавершении процесса оператор сначала останавливает работника и только затем\nзакрывает зависшую запись запуска. Ограниченная maxPages загрузка — partial,\nа не подтверждение полного обхода источника.",
+    "version": "1.0",
+    "contact": {}
+  },
+  "tags": [],
+  "servers": [],
+  "components": {
+    "securitySchemes": {
+      "bearer": {
+        "scheme": "bearer",
+        "bearerFormat": "JWT",
+        "type": "http"
+      }
+    },
+    "schemas": {}
+  }
+}

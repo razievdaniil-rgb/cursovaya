@@ -1,0 +1,62 @@
+import { Module } from '@nestjs/common';
+import { ConfigModule, ConfigService } from '@nestjs/config';
+import { APP_GUARD } from '@nestjs/core';
+import { ThrottlerModule } from '@nestjs/throttler';
+
+import { AnalyticsModule } from './analytics/analytics.module';
+import { AuthModule } from './auth/auth.module';
+import { CatalogModule } from './catalog/catalog.module';
+import { ComparisonsModule } from './comparisons/comparisons.module';
+import { NotificationsModule } from './notifications/notifications.module';
+import { OrganizationsModule } from './organizations/organizations.module';
+import { ReviewsModule } from './reviews/reviews.module';
+import { SavedListsModule } from './saved-lists/saved-lists.module';
+import { SyncModule } from './sync/sync.module';
+import { JwtAuthGuard } from './auth/jwt-auth.guard';
+import { RolesGuard } from './auth/roles.guard';
+import { AppThrottlerGuard } from './common/app-throttler.guard';
+import { validateEnv } from './common/config/env.schema';
+import { HealthController } from './common/health.controller';
+import { PrismaModule } from './prisma/prisma.module';
+
+@Module({
+  imports: [
+    ConfigModule.forRoot({
+      isGlobal: true,
+      cache: true,
+      validate: validateEnv,
+    }),
+    // Общий лимит плюс именованный профиль `auth`, который контроллер
+    // авторизации ужесточает декоратором @Throttle на каждом маршруте.
+    ThrottlerModule.forRootAsync({
+      inject: [ConfigService],
+      useFactory: (config: ConfigService) => ({
+        throttlers: [
+          {
+            name: 'default',
+            limit: config.getOrThrow<number>('THROTTLE_DEFAULT_LIMIT'),
+            ttl: 60_000,
+          },
+        ],
+      }),
+    }),
+    PrismaModule,
+    AuthModule,
+    CatalogModule,
+    ReviewsModule,
+    SavedListsModule,
+    ComparisonsModule,
+    NotificationsModule,
+    OrganizationsModule,
+    SyncModule,
+    AnalyticsModule,
+  ],
+  controllers: [HealthController],
+  providers: [
+    { provide: APP_GUARD, useClass: AppThrottlerGuard },
+    // Порядок важен: сначала аутентификация, затем проверка ролей.
+    { provide: APP_GUARD, useClass: JwtAuthGuard },
+    { provide: APP_GUARD, useClass: RolesGuard },
+  ],
+})
+export class AppModule {}

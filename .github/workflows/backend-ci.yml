@@ -1,0 +1,310 @@
+name: Backend CI
+
+# Отдельный workflow: deploy-pages.yml не затрагивается, frontend-сборка и
+# публикация на GitHub Pages продолжают работать независимо от backend.
+on:
+  push:
+    # Рабочие ветки тоже проверяются: иначе до открытия pull request проверки
+    # не запускаются вовсе. Публикация на GitHub Pages остаётся только для
+    # main — за неё отвечает отдельный workflow deploy-pages.yml.
+    branches: [main, 'feat/**', 'fix/**']
+    paths:
+      - 'backend/**'
+      - 'src/**'
+      - 'e2e/**'
+      - 'package.json'
+      - 'package-lock.json'
+      - 'docker-compose.yml'
+      - 'Dockerfile.web'
+      - 'deploy/**'
+      - '.github/workflows/backend-ci.yml'
+  pull_request:
+    paths:
+      - 'backend/**'
+      - 'src/**'
+      - 'e2e/**'
+      - 'package.json'
+      - 'package-lock.json'
+      - 'docker-compose.yml'
+      - 'Dockerfile.web'
+      - 'deploy/**'
+      - '.github/workflows/backend-ci.yml'
+  workflow_dispatch:
+
+jobs:
+  # Главная проверка этапа: схема применяется на ЧИСТОЙ базе одной командой,
+  # после чего идемпотентный seed выполняется дважды с одинаковым результатом.
+  migrations:
+    name: Миграции и seed на пустом PostgreSQL
+    runs-on: ubuntu-latest
+
+    defaults:
+      run:
+        working-directory: backend
+
+    services:
+      postgres:
+        image: postgres:17
+        env:
+          POSTGRES_DB: medizdeliya_ci
+          POSTGRES_USER: medizdeliya
+          POSTGRES_PASSWORD: medizdeliya_ci
+          # Обязательно: при locale=C русский стемминг не работает (см. docker-compose.yml)
+          POSTGRES_INITDB_ARGS: "--locale=C.UTF-8 --encoding=UTF8"
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U medizdeliya -d medizdeliya_ci"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 20
+
+    env:
+      DATABASE_URL: postgresql://medizdeliya:medizdeliya_ci@localhost:5432/medizdeliya_ci?schema=public
+      SEED_DEV_PASSWORD: ci-only-password-2026
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+          cache-dependency-path: backend/package-lock.json
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Применить миграции с нуля
+        run: npm run db:migrate:deploy
+
+      - name: Проверить, что schema.prisma не расходится с миграциями
+        # Пустой diff означает: применённые миграции дают ровно ту схему,
+        # которая описана в schema.prisma.
+        run: |
+          npx prisma migrate diff \
+            --from-schema-datasource prisma/schema.prisma \
+            --to-schema-datamodel prisma/schema.prisma \
+            --exit-code
+
+      - name: Seed
+        run: npm run db:seed
+
+      - name: Проверить ограничения, триггеры и представления
+        # После seed: поведенческие проверки CHECK требуют данных в таблицах.
+        run: npx tsx test/verify-schema-objects.ts
+
+      - name: Seed повторно (проверка идемпотентности)
+        run: npx tsx test/verify-seed-idempotent.ts
+
+  checks:
+    name: Типы, линтер и тесты
+    runs-on: ubuntu-latest
+
+    defaults:
+      run:
+        working-directory: backend
+
+    services:
+      postgres:
+        image: postgres:17
+        env:
+          POSTGRES_DB: cursovaya_test_ci
+          POSTGRES_USER: medizdeliya
+          POSTGRES_PASSWORD: medizdeliya_ci
+          # Обязательно: при locale=C русский стемминг не работает (см. docker-compose.yml)
+          POSTGRES_INITDB_ARGS: "--locale=C.UTF-8 --encoding=UTF8"
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U medizdeliya -d cursovaya_test_ci"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 20
+
+    env:
+      DATABASE_URL: postgresql://medizdeliya:medizdeliya_ci@localhost:5432/cursovaya_test_ci?schema=public
+      REGISTRY_TEST_DATABASE_NAME: cursovaya_test_ci
+      JWT_ACCESS_SECRET: ci_only_access_secret_at_least_32_chars_long
+      JWT_REFRESH_SECRET: ci_only_refresh_secret_at_least_32_chars_long
+      FRONTEND_ORIGINS: http://localhost:5173
+      SEED_DEV_PASSWORD: ci-only-password-2026
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+          cache-dependency-path: backend/package-lock.json
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Prisma generate
+        run: npm run db:generate
+
+      - name: Подготовить тестовую базу
+        run: npm run db:migrate:deploy && npm run db:seed
+
+      - name: Typecheck
+        run: npm run typecheck
+
+      - name: Lint
+        run: npm run lint
+
+      - name: Unit-тесты
+        # База для них не нужна, но прогоняются вместе с остальными.
+        run: npm run test:unit
+
+      - name: Integration-тесты
+        run: npm run test:integration
+
+      - name: OpenAPI описывает все эндпоинты из CLAUDE.md
+        # Скрипт строит документ из тех же контроллеров и схем Zod, которые
+        # обслуживают запросы, и падает, если обязательной операции нет.
+        run: npm run openapi:export
+
+      - name: Экспортированный OpenAPI не разошёлся с кодом
+        run: git diff --exit-code -- docs/openapi.json
+
+  # Проверка связки frontend ↔ API: интерфейс собирается с VITE_API_URL и
+  # работает против поднятого backend с применённым seed. Демо на
+  # mock-адаптере проверяется отдельно в e2e без E2E_API_URL.
+  frontend-http:
+    name: Frontend через HTTP API
+    runs-on: ubuntu-latest
+
+    services:
+      postgres:
+        image: postgres:17
+        env:
+          POSTGRES_DB: medizdeliya_e2e
+          POSTGRES_USER: medizdeliya
+          POSTGRES_PASSWORD: medizdeliya_ci
+          POSTGRES_INITDB_ARGS: "--locale=C.UTF-8 --encoding=UTF8"
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U medizdeliya -d medizdeliya_e2e"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 20
+
+    env:
+      DATABASE_URL: postgresql://medizdeliya:medizdeliya_ci@localhost:5432/medizdeliya_e2e?schema=public
+      JWT_ACCESS_SECRET: ci_only_access_secret_at_least_32_chars_long
+      JWT_REFRESH_SECRET: ci_only_refresh_secret_at_least_32_chars_long
+      FRONTEND_ORIGINS: http://127.0.0.1:4173
+      SEED_DEV_PASSWORD: ci-only-password-2026
+      PORT: 3000
+      # Наборы desktop и mobile идут параллельно и на общий лимит 600
+      # запросов в минуту упираются. Флаг существует ровно для таких
+      # прогонов, а env.schema.ts запрещает его в production.
+      THROTTLE_DISABLED: 'true'
+
+    # У этой джобы намеренно нет defaults.run.working-directory: шаги
+    # frontend должны выполняться из корня репозитория, а backend-шаги
+    # указывают каталог явно. Общий default на уровне workflow приводил к
+    # тому, что frontend собирался внутри backend/, а путь до API удваивался.
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+
+      - name: Установить зависимости backend
+        working-directory: backend
+        run: npm ci
+
+      - name: Поднять схему и данные
+        working-directory: backend
+        run: npm run db:migrate:deploy && npm run db:generate && npm run db:seed
+
+      - name: Собрать API
+        working-directory: backend
+        run: npm run build
+
+      - name: Установить зависимости frontend
+        run: npm ci
+
+      - name: Собрать frontend с адресом API
+        run: npm run build
+        env:
+          VITE_API_URL: http://127.0.0.1:3000/api/v1
+
+      - name: Установить браузер Playwright
+        run: npx playwright install --with-deps chrome
+
+      - name: Smoke-тесты интерфейса через HTTP API
+        # API запускается здесь же: фоновый процесс из отдельного шага не
+        # доживает до теста, потому что между шагами выполняются установка
+        # зависимостей frontend и загрузка браузера.
+        run: |
+          node backend/dist/main.js > /tmp/api.log 2>&1 &
+          API_PID=$!
+          for i in $(seq 1 40); do
+            if curl -sf http://127.0.0.1:3000/api/v1/health > /dev/null; then break; fi
+            if ! kill -0 "$API_PID" 2>/dev/null; then
+              node -e "const fs=require('fs');const [path,label]=process.argv.slice(1);let text;try{text=fs.readFileSync(path,'utf8')}catch(e){text='нет '+path}const body=text.split('\n').slice(-40).map(l=>l.replace(/%/g,'%25')).join('%0A');console.log('::error title='+label+'::'+body)" /tmp/api.log "API упал при старте"
+              exit 1
+            fi
+            sleep 2
+          done
+          if ! curl -sf http://127.0.0.1:3000/api/v1/health > /dev/null; then
+            node -e "const fs=require('fs');const [path,label]=process.argv.slice(1);let text;try{text=fs.readFileSync(path,'utf8')}catch(e){text='нет '+path}const body=text.split('\n').slice(-40).map(l=>l.replace(/%/g,'%25')).join('%0A');console.log('::error title='+label+'::'+body)" /tmp/api.log "API не ответил"
+            kill "$API_PID" 2>/dev/null || true
+            exit 1
+          fi
+          set +e
+          npx playwright test e2e/http-api.spec.ts --project=desktop
+          STATUS=$?
+          set -e
+          kill "$API_PID" 2>/dev/null || true
+          if [ "$STATUS" -ne 0 ]; then node -e "const fs=require('fs');const [path,label]=process.argv.slice(1);let text;try{text=fs.readFileSync(path,'utf8')}catch(e){text='нет '+path}const body=text.split('\n').slice(-40).map(l=>l.replace(/%/g,'%25')).join('%0A');console.log('::error title='+label+'::'+body)" /tmp/api.log "лог API"; fi
+          exit "$STATUS"
+        env:
+          E2E_API_URL: http://127.0.0.1:3000/api/v1
+          E2E_SEED_PASSWORD: ci-only-password-2026
+
+      - uses: actions/upload-artifact@v4
+        if: failure()
+        with:
+          name: playwright-http-report
+          path: |
+            playwright-report
+            test-results
+          retention-days: 7
+
+  containers:
+    name: Docker Compose на чистой базе
+    runs-on: ubuntu-latest
+    needs: [migrations, checks]
+    env:
+      JWT_ACCESS_SECRET: ci_container_access_secret_at_least_32_chars
+      JWT_REFRESH_SECRET: ci_container_refresh_secret_at_least_32_chars
+      POSTGRES_DB: medizdeliya_container
+      POSTGRES_USER: medizdeliya
+      POSTGRES_PASSWORD: ci_container_password
+      FRONTEND_ORIGINS: http://localhost:8080
+    steps:
+      - uses: actions/checkout@v4
+      - name: Проверить конфигурацию и поднять полный стек
+        run: |
+          docker compose config --quiet
+          docker compose up --build -d --wait --wait-timeout 240
+      - name: Проверить API, регистрацию без seed и SPA
+        run: |
+          curl --fail http://localhost:8080/api/v1/health
+          curl --fail http://localhost:8080/catalog > /tmp/catalog.html
+          grep -q '<!doctype html>' /tmp/catalog.html
+          curl --fail -X POST http://localhost:8080/api/v1/auth/register -H 'Content-Type: application/json' --data '{"email":"ci-container@example.test","password":"Container-Smoke-Password-2026","displayName":"Container smoke"}' > /tmp/register.json
+          node -e "const fs=require('fs'); const j=JSON.parse(fs.readFileSync('/tmp/register.json','utf8')); if(j.data.user.email!=='ci-container@example.test'||!j.data.user.roles.includes('user')) process.exit(1); console.log('Registration without seed works')"
+      - name: Логи контейнеров
+        if: failure()
+        run: docker compose logs --no-color --tail 100
+      - name: Убрать тестовые контейнеры и volume
+        if: always()
+        run: docker compose down -v

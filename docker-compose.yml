@@ -1,0 +1,89 @@
+name: medizdeliya
+
+services:
+  postgres:
+    # Debian-образ, а не alpine: русский стемминг зависит от lc_ctype, и
+    # glibc-локаль C.UTF-8 корректно приводит кириллицу к нижнему регистру.
+    image: postgres:17
+    container_name: medizdeliya-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-medizdeliya}
+      POSTGRES_USER: ${POSTGRES_USER:-medizdeliya}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-medizdeliya_local}
+      # Локаль обязательна: при --locale=C запрос
+      # to_tsvector('russian', 'НПП Биосигнал') не приводит слова к нижнему
+      # регистру и поиск по производителю молча перестаёт работать. Проверка
+      # этого поведения есть в test/verify-schema-objects.ts.
+      POSTGRES_INITDB_ARGS: "--locale=C.UTF-8 --encoding=UTF8"
+    ports:
+      - "${POSTGRES_PORT:-5432}:5432"
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    healthcheck:
+      test:
+        [
+          "CMD-SHELL",
+          "pg_isready -U ${POSTGRES_USER:-medizdeliya} -d ${POSTGRES_DB:-medizdeliya}",
+        ]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+      start_period: 10s
+
+  api:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: medizdeliya-api
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      NODE_ENV: production
+      PORT: 3000
+      DATABASE_URL: postgresql://${POSTGRES_USER:-medizdeliya}:${POSTGRES_PASSWORD:-medizdeliya_local}@postgres:5432/${POSTGRES_DB:-medizdeliya}?schema=public
+      JWT_ACCESS_SECRET: ${JWT_ACCESS_SECRET:?JWT_ACCESS_SECRET is required}
+      JWT_REFRESH_SECRET: ${JWT_REFRESH_SECRET:?JWT_REFRESH_SECRET is required}
+      FRONTEND_ORIGINS: ${FRONTEND_ORIGINS:-http://localhost:8080}
+      STORAGE_DRIVER: ${STORAGE_DRIVER:-local}
+      SEED_DEV_PASSWORD: ${SEED_DEV_PASSWORD:-}
+      # Загрузка государственного реестра идёт по TLS с сертификатом
+      # национального УЦ Минцифры (ADR 0010). Переменная добавляет его корень
+      # к доверенным только для этого процесса и не отключает проверку.
+      NODE_EXTRA_CA_CERTS: /app/certs/russian-trusted-ca.pem
+      REGISTRY_SOURCE_URL: ${REGISTRY_SOURCE_URL:-}
+      ANALYTICS_REFRESH_INTERVAL_MINUTES: ${ANALYTICS_REFRESH_INTERVAL_MINUTES:-15}
+      RECOVERY_EMAIL_API_URL: ${RECOVERY_EMAIL_API_URL:-}
+      RECOVERY_EMAIL_API_KEY: ${RECOVERY_EMAIL_API_KEY:-}
+      RECOVERY_EMAIL_FROM: ${RECOVERY_EMAIL_FROM:-}
+      RECOVERY_RESET_URL: ${RECOVERY_RESET_URL:-}
+    ports:
+      - "${API_PORT:-3000}:3000"
+    volumes:
+      - api-storage:/app/storage
+    # Миграции применяются перед стартом приложения, поэтому контейнер
+    # поднимается на уже готовой схеме.
+    command: sh -c "./node_modules/.bin/prisma migrate deploy && node dist/main.js"
+    healthcheck:
+      test: ["CMD-SHELL", "node -e \"fetch('http://127.0.0.1:3000/api/v1/health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))\""]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 20s
+
+  web:
+    build:
+      context: .
+      dockerfile: Dockerfile.web
+    depends_on:
+      api:
+        condition: service_healthy
+    ports:
+      - "${WEB_PORT:-8080}:8080"
+    restart: unless-stopped
+
+volumes:
+  postgres-data:
+  api-storage:

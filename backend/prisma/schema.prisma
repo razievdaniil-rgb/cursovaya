@@ -1,0 +1,943 @@
+// Схема БД платформы «Медицинские изделия России».
+//
+// Принципы (см. backend/docs/adr/0003-third-normal-form.md):
+//   * справочные значения живут в отдельных таблицах, а не строками в бизнес-таблицах;
+//   * JSON-колонок нет: характеристики изделия — это определения + типизированные значения;
+//   * производные величины (рейтинг, число отзывов, диапазон цен, доли импорта)
+//     в базовых таблицах не хранятся, их дают представления из миграции
+//     0002_constraints_and_views;
+//   * деньги — numeric(14,2), моменты времени — timestamptz, идентификаторы — uuid.
+
+generator client {
+  provider        = "prisma-client-js"
+  previewFeatures = ["postgresqlExtensions"]
+}
+
+datasource db {
+  provider   = "postgresql"
+  url        = env("DATABASE_URL")
+  extensions = [citext, pg_trgm]
+}
+
+// ---------------------------------------------------------------------------
+// Пользователи и доступ
+// ---------------------------------------------------------------------------
+
+model AccountStatus {
+  id   String @id @default(uuid()) @db.Uuid
+  code String @unique @db.VarChar(32)
+  name String @db.VarChar(128)
+
+  users User[]
+
+  @@map("account_statuses")
+}
+
+model Role {
+  id   String @id @default(uuid()) @db.Uuid
+  code String @unique @db.VarChar(32)
+  name String @db.VarChar(128)
+
+  userRoles UserRole[]
+
+  @@map("roles")
+}
+
+model User {
+  id              String    @id @default(uuid()) @db.Uuid
+  email           String    @unique @db.Citext
+  passwordHash    String    @map("password_hash")
+  displayName     String    @map("display_name") @db.VarChar(255)
+  accountStatusId String    @map("account_status_id") @db.Uuid
+  emailVerifiedAt DateTime? @map("email_verified_at") @db.Timestamptz(6)
+  createdAt       DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt       DateTime  @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  accountStatus AccountStatus @relation(fields: [accountStatusId], references: [id], onDelete: Restrict, onUpdate: Cascade)
+
+  roles               UserRole[]
+  refreshTokens       RefreshToken[]
+  passwordResetTokens PasswordResetToken[]
+  organizationMembers OrganizationMember[]
+  reviews             Review[]
+  moderationEvents    ReviewModerationEvent[]
+  savedLists          SavedList[]
+  comparisons         Comparison[]
+  notifications       NotificationRecipient[]
+  initiatedSyncRuns   SyncRun[]
+
+  @@index([accountStatusId])
+  @@map("users")
+}
+
+/// Роль пользователя не хранится строкой в users — только этой связью.
+model UserRole {
+  userId     String   @map("user_id") @db.Uuid
+  roleId     String   @map("role_id") @db.Uuid
+  assignedAt DateTime @default(now()) @map("assigned_at") @db.Timestamptz(6)
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade, onUpdate: Cascade)
+  role Role @relation(fields: [roleId], references: [id], onDelete: Restrict, onUpdate: Cascade)
+
+  @@id([userId, roleId])
+  @@index([roleId])
+  @@map("user_roles")
+}
+
+/// Хранится только SHA-256-хеш токена. replaced_by_id образует цепочку ротации.
+model RefreshToken {
+  id           String    @id @default(uuid()) @db.Uuid
+  userId       String    @map("user_id") @db.Uuid
+  tokenHash    String    @unique @map("token_hash") @db.VarChar(64)
+  expiresAt    DateTime  @map("expires_at") @db.Timestamptz(6)
+  revokedAt    DateTime? @map("revoked_at") @db.Timestamptz(6)
+  replacedById String?   @unique @map("replaced_by_id") @db.Uuid
+  createdAt    DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+  userAgent    String?   @map("user_agent") @db.VarChar(512)
+  ipHash       String?   @map("ip_hash") @db.VarChar(64)
+
+  user       User          @relation(fields: [userId], references: [id], onDelete: Cascade, onUpdate: Cascade)
+  replacedBy RefreshToken? @relation("RefreshTokenRotation", fields: [replacedById], references: [id], onDelete: SetNull, onUpdate: Cascade)
+  replaces   RefreshToken? @relation("RefreshTokenRotation")
+
+  @@index([userId])
+  @@index([expiresAt])
+  @@map("refresh_tokens")
+}
+
+model PasswordResetToken {
+  id        String    @id @default(uuid()) @db.Uuid
+  userId    String    @map("user_id") @db.Uuid
+  tokenHash String    @unique @map("token_hash") @db.VarChar(64)
+  expiresAt DateTime  @map("expires_at") @db.Timestamptz(6)
+  usedAt    DateTime? @map("used_at") @db.Timestamptz(6)
+  createdAt DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade, onUpdate: Cascade)
+
+  @@index([userId])
+  @@index([expiresAt])
+  @@map("password_reset_tokens")
+}
+
+// ---------------------------------------------------------------------------
+// География
+// ---------------------------------------------------------------------------
+
+model Country {
+  id   String @id @default(uuid()) @db.Uuid
+  iso2 String @unique @db.Char(2)
+  name String @unique @db.VarChar(128)
+
+  regions       Region[]
+  manufacturers Manufacturer[]
+
+  @@map("countries")
+}
+
+model Region {
+  id        String @id @default(uuid()) @db.Uuid
+  countryId String @map("country_id") @db.Uuid
+  code      String @db.VarChar(16)
+  name      String @db.VarChar(128)
+
+  country Country @relation(fields: [countryId], references: [id], onDelete: Restrict, onUpdate: Cascade)
+
+  cities         City[]
+  supplierOffers SupplierOffer[]
+
+  @@unique([countryId, code])
+  @@index([countryId])
+  @@map("regions")
+}
+
+model City {
+  id       String @id @default(uuid()) @db.Uuid
+  regionId String @map("region_id") @db.Uuid
+  name     String @db.VarChar(128)
+
+  region Region @relation(fields: [regionId], references: [id], onDelete: Restrict, onUpdate: Cascade)
+
+  organizations Organization[]
+  manufacturers Manufacturer[]
+
+  @@unique([regionId, name])
+  @@index([regionId])
+  @@map("cities")
+}
+
+// ---------------------------------------------------------------------------
+// Организации
+// ---------------------------------------------------------------------------
+
+model OrganizationType {
+  id   String @id @default(uuid()) @db.Uuid
+  code String @unique @db.VarChar(32)
+  name String @db.VarChar(128)
+
+  organizations Organization[]
+
+  @@map("organization_types")
+}
+
+model OrganizationVerificationStatus {
+  id   String @id @default(uuid()) @db.Uuid
+  code String @unique @db.VarChar(32)
+  name String @db.VarChar(128)
+
+  organizations Organization[]
+
+  @@map("organization_verification_statuses")
+}
+
+model Organization {
+  id                   String   @id @default(uuid()) @db.Uuid
+  organizationTypeId   String   @map("organization_type_id") @db.Uuid
+  verificationStatusId String   @map("verification_status_id") @db.Uuid
+  name                 String   @db.VarChar(512)
+  shortName            String?  @map("short_name") @db.VarChar(255)
+  inn                  String?  @unique @db.VarChar(12)
+  ogrn                 String?  @unique @db.VarChar(15)
+  cityId               String?  @map("city_id") @db.Uuid
+  address              String?  @db.VarChar(512)
+  createdAt            DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt            DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  organizationType   OrganizationType               @relation(fields: [organizationTypeId], references: [id], onDelete: Restrict, onUpdate: Cascade)
+  verificationStatus OrganizationVerificationStatus @relation(fields: [verificationStatusId], references: [id], onDelete: Restrict, onUpdate: Cascade)
+  city               City?                          @relation(fields: [cityId], references: [id], onDelete: SetNull, onUpdate: Cascade)
+
+  members       OrganizationMember[]
+  manufacturers Manufacturer[]
+  supplier      Supplier?
+  reviews       Review[]
+  savedLists    SavedList[]
+
+  @@index([organizationTypeId])
+  @@index([verificationStatusId])
+  @@index([cityId])
+  @@map("organizations")
+}
+
+model OrganizationMemberRole {
+  id   String @id @default(uuid()) @db.Uuid
+  code String @unique @db.VarChar(32)
+  name String @db.VarChar(128)
+
+  members OrganizationMember[]
+
+  @@map("organization_member_roles")
+}
+
+model OrganizationMember {
+  organizationId String    @map("organization_id") @db.Uuid
+  userId         String    @map("user_id") @db.Uuid
+  memberRoleId   String    @map("member_role_id") @db.Uuid
+  joinedAt       DateTime  @default(now()) @map("joined_at") @db.Timestamptz(6)
+  verifiedAt     DateTime? @map("verified_at") @db.Timestamptz(6)
+
+  organization Organization           @relation(fields: [organizationId], references: [id], onDelete: Cascade, onUpdate: Cascade)
+  user         User                   @relation(fields: [userId], references: [id], onDelete: Cascade, onUpdate: Cascade)
+  memberRole   OrganizationMemberRole @relation(fields: [memberRoleId], references: [id], onDelete: Restrict, onUpdate: Cascade)
+
+  @@id([organizationId, userId])
+  @@index([userId])
+  @@index([memberRoleId])
+  @@map("organization_members")
+}
+
+// ---------------------------------------------------------------------------
+// Каталог и регистрационные сведения
+// ---------------------------------------------------------------------------
+
+model Manufacturer {
+  id             String   @id @default(uuid()) @db.Uuid
+  organizationId String?  @map("organization_id") @db.Uuid
+  name           String   @db.VarChar(512)
+  /// Реестр не публикует страну производителя, только адрес строкой.
+  countryId      String?  @map("country_id") @db.Uuid
+  /// Адрес производителя в том виде, в каком его публикует реестр.
+  actualAddress  String?  @map("actual_address") @db.VarChar(1024)
+  cityId         String?  @map("city_id") @db.Uuid
+  website        String?  @db.VarChar(512)
+  createdAt      DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt      DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  organization Organization? @relation(fields: [organizationId], references: [id], onDelete: SetNull, onUpdate: Cascade)
+  country      Country?      @relation(fields: [countryId], references: [id], onDelete: Restrict, onUpdate: Cascade)
+  city         City?         @relation(fields: [cityId], references: [id], onDelete: SetNull, onUpdate: Cascade)
+
+  products Product[]
+
+  @@index([organizationId])
+  @@index([countryId])
+  @@index([cityId])
+  @@index([name(ops: raw("gin_trgm_ops"))], type: Gin, map: "manufacturers_name_trgm_idx")
+  @@map("manufacturers")
+}
+
+model ProductCategory {
+  id        String  @id @default(uuid()) @db.Uuid
+  parentId  String? @map("parent_id") @db.Uuid
+  name      String  @db.VarChar(255)
+  slug      String  @unique @db.VarChar(255)
+  sortOrder Int     @default(0) @map("sort_order") @db.SmallInt
+
+  parent   ProductCategory?  @relation("CategoryTree", fields: [parentId], references: [id], onDelete: Restrict, onUpdate: Cascade)
+  children ProductCategory[] @relation("CategoryTree")
+
+  products                  Product[]
+  characteristicDefinitions CharacteristicDefinition[]
+
+  @@index([parentId])
+  @@map("product_categories")
+}
+
+model RiskClass {
+  id        String @id @default(uuid()) @db.Uuid
+  code      String @unique @db.VarChar(8)
+  name      String @db.VarChar(128)
+  sortOrder Int    @default(0) @map("sort_order") @db.SmallInt
+
+  products Product[]
+
+  @@map("risk_classes")
+}
+
+model ProductOriginType {
+  id   String @id @default(uuid()) @db.Uuid
+  code String @unique @db.VarChar(32)
+  name String @db.VarChar(128)
+
+  products Product[]
+
+  @@map("product_origin_types")
+}
+
+model RegistryStatus {
+  id   String @id @default(uuid()) @db.Uuid
+  code String @unique @db.VarChar(32)
+  name String @db.VarChar(128)
+
+  products Product[]
+  history  RegistryStatusHistory[]
+
+  @@map("registry_statuses")
+}
+
+model Product {
+  id                      String    @id @default(uuid()) @db.Uuid
+  manufacturerId          String    @map("manufacturer_id") @db.Uuid
+  /// Реестр не содержит категории: она есть только у демонстрационных данных.
+  categoryId              String?   @map("category_id") @db.Uuid
+  /// В реестре класс риска заполнен у 0–3 % записей (проверено на 1566).
+  riskClassId             String?   @map("risk_class_id") @db.Uuid
+  /// Происхождение в реестре не публикуется.
+  originTypeId            String?   @map("origin_type_id") @db.Uuid
+  currentRegistryStatusId String    @map("current_registry_status_id") @db.Uuid
+  nomenclatureTypeId      String?   @map("nomenclature_type_id") @db.Uuid
+  /// Идентификатор записи в государственном реестре; ключ для повторной загрузки.
+  externalRegistryId      Int?      @unique @map("external_registry_id")
+  /// Правовая система регистрации: RUSSIA или EAEU.
+  legalSystem             String?   @map("legal_system") @db.VarChar(16)
+  /// Перечень моделей и принадлежностей из реестра.
+  modelsDescription       String?   @map("models_description")
+  /// Идентификатор записи во ФРНСИ.
+  frnsiId                 String?   @map("frnsi_id") @db.VarChar(64)
+  name                    String    @db.VarChar(512)
+  shortName               String    @map("short_name") @db.VarChar(255)
+  registrationNumber      String    @unique @map("registration_number") @db.VarChar(64)
+  registrationDate        DateTime? @map("registration_date") @db.Date
+  registrationExpiresAt   DateTime? @map("registration_expires_at") @db.Date
+  verifiedAt              DateTime? @map("verified_at") @db.Timestamptz(6)
+  description             String?
+  createdAt               DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt               DateTime  @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  manufacturer          Manufacturer       @relation(fields: [manufacturerId], references: [id], onDelete: Restrict, onUpdate: Cascade)
+  category              ProductCategory?   @relation(fields: [categoryId], references: [id], onDelete: Restrict, onUpdate: Cascade)
+  riskClass             RiskClass?         @relation(fields: [riskClassId], references: [id], onDelete: Restrict, onUpdate: Cascade)
+  originType            ProductOriginType? @relation(fields: [originTypeId], references: [id], onDelete: Restrict, onUpdate: Cascade)
+  currentRegistryStatus RegistryStatus     @relation(fields: [currentRegistryStatusId], references: [id], onDelete: Restrict, onUpdate: Cascade)
+  nomenclatureType      NomenclatureType?  @relation(fields: [nomenclatureTypeId], references: [id], onDelete: SetNull, onUpdate: Cascade)
+
+  images               ProductImage[]
+  documents            ProductDocument[]
+  statusHistory        RegistryStatusHistory[]
+  characteristicValues ProductCharacteristicValue[]
+  supplierOffers       SupplierOffer[]
+  analogues            ProductAnalogue[]            @relation("AnalogueSource")
+  analogueOf           ProductAnalogue[]            @relation("AnalogueTarget")
+  reviews              Review[]
+  savedListItems       SavedListItem[]
+  comparisonItems      ComparisonItem[]
+  notifications        Notification[]
+  searchDocument       ProductSearchDocument?
+
+  @@index([manufacturerId])
+  @@index([categoryId])
+  @@index([riskClassId])
+  @@index([originTypeId])
+  @@index([currentRegistryStatusId])
+  @@index([nomenclatureTypeId])
+  @@index([registrationExpiresAt])
+  // Триграммный индекс для подстрочного поиска «21851» внутри «РЗН 2024/21851».
+  @@index([registrationNumber(ops: raw("gin_trgm_ops"))], type: Gin, map: "products_registration_number_trgm_idx")
+  @@map("products")
+}
+
+/// Производный поисковый индекс. Не источник истины: таблица целиком
+/// пересобирается триггерами из products и manufacturers (миграция 0002).
+model ProductSearchDocument {
+  productId    String                   @id @map("product_id") @db.Uuid
+  searchVector Unsupported("tsvector")? @map("search_vector")
+  updatedAt    DateTime                 @default(now()) @map("updated_at") @db.Timestamptz(6)
+
+  product Product @relation(fields: [productId], references: [id], onDelete: Cascade, onUpdate: Cascade)
+
+  // GIN по tsvector — основной индекс полнотекстового поиска. Имя совпадает с
+  // тем, что создаёт миграция 0002, поэтому `migrate diff` не видит drift.
+  @@index([searchVector], type: Gin, map: "product_search_documents_vector_idx")
+  @@map("product_search_documents")
+}
+
+model ProductImage {
+  id         String   @id @default(uuid()) @db.Uuid
+  productId  String   @map("product_id") @db.Uuid
+  storageKey String   @map("storage_key") @db.VarChar(512)
+  altText    String?  @map("alt_text") @db.VarChar(512)
+  sortOrder  Int      @default(0) @map("sort_order") @db.SmallInt
+  createdAt  DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  product Product @relation(fields: [productId], references: [id], onDelete: Cascade, onUpdate: Cascade)
+
+  @@unique([productId, sortOrder])
+  @@index([productId])
+  @@map("product_images")
+}
+
+model DocumentType {
+  id   String @id @default(uuid()) @db.Uuid
+  code String @unique @db.VarChar(64)
+  name String @db.VarChar(128)
+
+  documents ProductDocument[]
+
+  @@map("document_types")
+}
+
+model ProductDocument {
+  id             String    @id @default(uuid()) @db.Uuid
+  productId      String    @map("product_id") @db.Uuid
+  documentTypeId String    @map("document_type_id") @db.Uuid
+  title          String    @db.VarChar(512)
+  storageKey     String    @map("storage_key") @db.VarChar(512)
+  documentNumber String?   @map("document_number") @db.VarChar(128)
+  issuedAt       DateTime? @map("issued_at") @db.Date
+  validUntil     DateTime? @map("valid_until") @db.Date
+  createdAt      DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  product      Product      @relation(fields: [productId], references: [id], onDelete: Cascade, onUpdate: Cascade)
+  documentType DocumentType @relation(fields: [documentTypeId], references: [id], onDelete: Restrict, onUpdate: Cascade)
+
+  @@index([productId])
+  @@index([documentTypeId])
+  @@map("product_documents")
+}
+
+/// История не перезаписывается: каждое изменение — отдельное событие.
+model RegistryStatusHistory {
+  id               String   @id @default(uuid()) @db.Uuid
+  productId        String   @map("product_id") @db.Uuid
+  registryStatusId String   @map("registry_status_id") @db.Uuid
+  effectiveAt      DateTime @map("effective_at") @db.Timestamptz(6)
+  sourceRunId      String?  @map("source_run_id") @db.Uuid
+  comment          String?  @db.VarChar(1024)
+  createdAt        DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  product        Product        @relation(fields: [productId], references: [id], onDelete: Cascade, onUpdate: Cascade)
+  registryStatus RegistryStatus @relation(fields: [registryStatusId], references: [id], onDelete: Restrict, onUpdate: Cascade)
+  sourceRun      SyncRun?       @relation(fields: [sourceRunId], references: [id], onDelete: SetNull, onUpdate: Cascade)
+
+  @@unique([productId, effectiveAt])
+  @@index([productId])
+  @@index([registryStatusId])
+  @@index([sourceRunId])
+  @@map("registry_status_history")
+}
+
+// ---------------------------------------------------------------------------
+// Характеристики без JSON
+// ---------------------------------------------------------------------------
+
+model MeasurementUnit {
+  id     String  @id @default(uuid()) @db.Uuid
+  code   String  @unique @db.VarChar(32)
+  name   String  @db.VarChar(128)
+  symbol String? @db.VarChar(16)
+
+  definitions CharacteristicDefinition[]
+
+  @@map("measurement_units")
+}
+
+model CharacteristicValueType {
+  id   String @id @default(uuid()) @db.Uuid
+  code String @unique @db.VarChar(16)
+  name String @db.VarChar(128)
+
+  definitions CharacteristicDefinition[]
+
+  @@map("characteristic_value_types")
+}
+
+model CharacteristicDefinition {
+  id           String  @id @default(uuid()) @db.Uuid
+  categoryId   String? @map("category_id") @db.Uuid
+  code         String  @unique @db.VarChar(64)
+  name         String  @db.VarChar(255)
+  valueTypeId  String  @map("value_type_id") @db.Uuid
+  unitId       String? @map("unit_id") @db.Uuid
+  isComparable Boolean @default(true) @map("is_comparable")
+  sortOrder    Int     @default(0) @map("sort_order") @db.SmallInt
+
+  category  ProductCategory?        @relation(fields: [categoryId], references: [id], onDelete: SetNull, onUpdate: Cascade)
+  valueType CharacteristicValueType @relation(fields: [valueTypeId], references: [id], onDelete: Restrict, onUpdate: Cascade)
+  unit      MeasurementUnit?        @relation(fields: [unitId], references: [id], onDelete: SetNull, onUpdate: Cascade)
+
+  values ProductCharacteristicValue[]
+
+  @@index([categoryId])
+  @@index([valueTypeId])
+  @@index([unitId])
+  @@map("characteristic_definitions")
+}
+
+/// Ровно одно из typed-значений заполнено — CHECK в миграции 0002.
+model ProductCharacteristicValue {
+  id                         String    @id @default(uuid()) @db.Uuid
+  productId                  String    @map("product_id") @db.Uuid
+  characteristicDefinitionId String    @map("characteristic_definition_id") @db.Uuid
+  textValue                  String?   @map("text_value") @db.VarChar(1024)
+  numericValue               Decimal?  @map("numeric_value") @db.Decimal(18, 6)
+  booleanValue               Boolean?  @map("boolean_value")
+  dateValue                  DateTime? @map("date_value") @db.Date
+
+  product    Product                  @relation(fields: [productId], references: [id], onDelete: Cascade, onUpdate: Cascade)
+  definition CharacteristicDefinition @relation(fields: [characteristicDefinitionId], references: [id], onDelete: Restrict, onUpdate: Cascade)
+
+  @@unique([productId, characteristicDefinitionId])
+  @@index([productId])
+  @@index([characteristicDefinitionId])
+  @@map("product_characteristic_values")
+}
+
+// ---------------------------------------------------------------------------
+// Цены и поставщики
+// ---------------------------------------------------------------------------
+
+model Currency {
+  id     String @id @default(uuid()) @db.Uuid
+  code   String @unique @db.Char(3)
+  name   String @db.VarChar(128)
+  symbol String @db.VarChar(8)
+
+  offers SupplierOffer[]
+
+  @@map("currencies")
+}
+
+model Supplier {
+  id             String   @id @default(uuid()) @db.Uuid
+  organizationId String   @unique @map("organization_id") @db.Uuid
+  licenseNumber  String?  @map("license_number") @db.VarChar(128)
+  createdAt      DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade, onUpdate: Cascade)
+
+  offers SupplierOffer[]
+
+  @@map("suppliers")
+}
+
+model SupplierOffer {
+  id         String    @id @default(uuid()) @db.Uuid
+  productId  String    @map("product_id") @db.Uuid
+  supplierId String    @map("supplier_id") @db.Uuid
+  currencyId String    @map("currency_id") @db.Uuid
+  regionId   String?   @map("region_id") @db.Uuid
+  price      Decimal   @db.Decimal(14, 2)
+  validFrom  DateTime  @map("valid_from") @db.Timestamptz(6)
+  validUntil DateTime? @map("valid_until") @db.Timestamptz(6)
+  sourceUrl  String?   @map("source_url") @db.VarChar(1024)
+  createdAt  DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  product  Product  @relation(fields: [productId], references: [id], onDelete: Cascade, onUpdate: Cascade)
+  supplier Supplier @relation(fields: [supplierId], references: [id], onDelete: Cascade, onUpdate: Cascade)
+  currency Currency @relation(fields: [currencyId], references: [id], onDelete: Restrict, onUpdate: Cascade)
+  region   Region?  @relation(fields: [regionId], references: [id], onDelete: SetNull, onUpdate: Cascade)
+
+  @@index([productId])
+  @@index([supplierId])
+  @@index([currencyId])
+  @@index([regionId])
+  @@index([productId, validFrom, validUntil])
+  @@map("supplier_offers")
+}
+
+// ---------------------------------------------------------------------------
+// Аналоги
+// ---------------------------------------------------------------------------
+
+model AnalogueType {
+  id   String @id @default(uuid()) @db.Uuid
+  code String @unique @db.VarChar(32)
+  name String @db.VarChar(128)
+
+  analogues ProductAnalogue[]
+
+  @@map("analogue_types")
+}
+
+model ProductAnalogue {
+  productId         String   @map("product_id") @db.Uuid
+  analogueProductId String   @map("analogue_product_id") @db.Uuid
+  analogueTypeId    String   @map("analogue_type_id") @db.Uuid
+  similarityScore   Decimal? @map("similarity_score") @db.Decimal(5, 4)
+  createdAt         DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  product         Product      @relation("AnalogueSource", fields: [productId], references: [id], onDelete: Cascade, onUpdate: Cascade)
+  analogueProduct Product      @relation("AnalogueTarget", fields: [analogueProductId], references: [id], onDelete: Cascade, onUpdate: Cascade)
+  analogueType    AnalogueType @relation(fields: [analogueTypeId], references: [id], onDelete: Restrict, onUpdate: Cascade)
+
+  @@id([productId, analogueProductId])
+  @@index([analogueProductId])
+  @@index([analogueTypeId])
+  @@map("product_analogues")
+}
+
+// ---------------------------------------------------------------------------
+// Отзывы и модерация
+// ---------------------------------------------------------------------------
+
+model ReviewExperiencePeriod {
+  id        String @id @default(uuid()) @db.Uuid
+  code      String @unique @db.VarChar(32)
+  name      String @db.VarChar(128)
+  sortOrder Int    @default(0) @map("sort_order") @db.SmallInt
+
+  reviews Review[]
+
+  @@map("review_experience_periods")
+}
+
+model ReviewStatus {
+  id   String @id @default(uuid()) @db.Uuid
+  code String @unique @db.VarChar(32)
+  name String @db.VarChar(128)
+
+  reviews    Review[]
+  eventsFrom ReviewModerationEvent[] @relation("ModerationFromStatus")
+  eventsTo   ReviewModerationEvent[] @relation("ModerationToStatus")
+
+  @@map("review_statuses")
+}
+
+/// verified-бейдж не хранится: он вычисляется из author_organization_id и
+/// текущего статуса верификации организации.
+model Review {
+  id                   String    @id @default(uuid()) @db.Uuid
+  productId            String    @map("product_id") @db.Uuid
+  authorUserId         String    @map("author_user_id") @db.Uuid
+  authorOrganizationId String?   @map("author_organization_id") @db.Uuid
+  experiencePeriodId   String    @map("experience_period_id") @db.Uuid
+  reviewStatusId       String    @map("review_status_id") @db.Uuid
+  rating               Int       @db.SmallInt
+  title                String    @db.VarChar(255)
+  body                 String
+  createdAt            DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt            DateTime  @updatedAt @map("updated_at") @db.Timestamptz(6)
+  publishedAt          DateTime? @map("published_at") @db.Timestamptz(6)
+
+  product            Product                @relation(fields: [productId], references: [id], onDelete: Cascade, onUpdate: Cascade)
+  authorUser         User                   @relation(fields: [authorUserId], references: [id], onDelete: Restrict, onUpdate: Cascade)
+  authorOrganization Organization?          @relation(fields: [authorOrganizationId], references: [id], onDelete: SetNull, onUpdate: Cascade)
+  experiencePeriod   ReviewExperiencePeriod @relation(fields: [experiencePeriodId], references: [id], onDelete: Restrict, onUpdate: Cascade)
+  reviewStatus       ReviewStatus           @relation(fields: [reviewStatusId], references: [id], onDelete: Restrict, onUpdate: Cascade)
+
+  moderationEvents ReviewModerationEvent[]
+
+  @@unique([productId, authorUserId])
+  @@index([productId])
+  @@index([authorUserId])
+  @@index([authorOrganizationId])
+  @@index([reviewStatusId])
+  @@index([experiencePeriodId])
+  @@map("reviews")
+}
+
+model ReviewModerationEvent {
+  id              String   @id @default(uuid()) @db.Uuid
+  reviewId        String   @map("review_id") @db.Uuid
+  moderatorUserId String   @map("moderator_user_id") @db.Uuid
+  fromStatusId    String   @map("from_status_id") @db.Uuid
+  toStatusId      String   @map("to_status_id") @db.Uuid
+  comment         String?  @db.VarChar(1024)
+  createdAt       DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  review     Review       @relation(fields: [reviewId], references: [id], onDelete: Cascade, onUpdate: Cascade)
+  moderator  User         @relation(fields: [moderatorUserId], references: [id], onDelete: Restrict, onUpdate: Cascade)
+  fromStatus ReviewStatus @relation("ModerationFromStatus", fields: [fromStatusId], references: [id], onDelete: Restrict, onUpdate: Cascade)
+  toStatus   ReviewStatus @relation("ModerationToStatus", fields: [toStatusId], references: [id], onDelete: Restrict, onUpdate: Cascade)
+
+  @@index([reviewId])
+  @@index([moderatorUserId])
+  @@map("review_moderation_events")
+}
+
+// ---------------------------------------------------------------------------
+// Избранное и сравнения
+// ---------------------------------------------------------------------------
+
+model SavedList {
+  id             String   @id @default(uuid()) @db.Uuid
+  ownerUserId    String   @map("owner_user_id") @db.Uuid
+  organizationId String?  @map("organization_id") @db.Uuid
+  name           String   @db.VarChar(255)
+  createdAt      DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt      DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  owner        User          @relation(fields: [ownerUserId], references: [id], onDelete: Cascade, onUpdate: Cascade)
+  organization Organization? @relation(fields: [organizationId], references: [id], onDelete: SetNull, onUpdate: Cascade)
+
+  items SavedListItem[]
+
+  @@index([ownerUserId])
+  @@index([organizationId])
+  @@map("saved_lists")
+}
+
+model SavedListItem {
+  savedListId String   @map("saved_list_id") @db.Uuid
+  productId   String   @map("product_id") @db.Uuid
+  addedAt     DateTime @default(now()) @map("added_at") @db.Timestamptz(6)
+
+  savedList SavedList @relation(fields: [savedListId], references: [id], onDelete: Cascade, onUpdate: Cascade)
+  product   Product   @relation(fields: [productId], references: [id], onDelete: Cascade, onUpdate: Cascade)
+
+  @@id([savedListId, productId])
+  @@index([productId])
+  @@map("saved_list_items")
+}
+
+model Comparison {
+  id          String   @id @default(uuid()) @db.Uuid
+  ownerUserId String   @map("owner_user_id") @db.Uuid
+  name        String?  @db.VarChar(255)
+  createdAt   DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt   DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  owner User @relation(fields: [ownerUserId], references: [id], onDelete: Cascade, onUpdate: Cascade)
+
+  items ComparisonItem[]
+
+  @@index([ownerUserId])
+  @@map("comparisons")
+}
+
+/// Максимум три изделия обеспечивается CHECK на position и транзакцией сервиса.
+model ComparisonItem {
+  comparisonId String   @map("comparison_id") @db.Uuid
+  productId    String   @map("product_id") @db.Uuid
+  position     Int      @db.SmallInt
+  addedAt      DateTime @default(now()) @map("added_at") @db.Timestamptz(6)
+
+  comparison Comparison @relation(fields: [comparisonId], references: [id], onDelete: Cascade, onUpdate: Cascade)
+  product    Product    @relation(fields: [productId], references: [id], onDelete: Cascade, onUpdate: Cascade)
+
+  @@id([comparisonId, productId])
+  @@unique([comparisonId, position])
+  @@index([productId])
+  @@map("comparison_items")
+}
+
+// ---------------------------------------------------------------------------
+// Уведомления
+// ---------------------------------------------------------------------------
+
+model NotificationType {
+  id   String @id @default(uuid()) @db.Uuid
+  code String @unique @db.VarChar(64)
+  name String @db.VarChar(128)
+
+  notifications Notification[]
+
+  @@map("notification_types")
+}
+
+model NotificationSeverity {
+  id   String @id @default(uuid()) @db.Uuid
+  code String @unique @db.VarChar(16)
+  name String @db.VarChar(128)
+
+  notifications Notification[]
+
+  @@map("notification_severities")
+}
+
+model Notification {
+  id                 String   @id @default(uuid()) @db.Uuid
+  notificationTypeId String   @map("notification_type_id") @db.Uuid
+  severityId         String   @map("severity_id") @db.Uuid
+  productId          String?  @map("product_id") @db.Uuid
+  title              String   @db.VarChar(512)
+  body               String
+  createdAt          DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  notificationType NotificationType     @relation(fields: [notificationTypeId], references: [id], onDelete: Restrict, onUpdate: Cascade)
+  severity         NotificationSeverity @relation(fields: [severityId], references: [id], onDelete: Restrict, onUpdate: Cascade)
+  product          Product?             @relation(fields: [productId], references: [id], onDelete: SetNull, onUpdate: Cascade)
+
+  recipients NotificationRecipient[]
+
+  @@index([notificationTypeId])
+  @@index([severityId])
+  @@index([productId])
+  @@index([createdAt])
+  @@map("notifications")
+}
+
+model NotificationRecipient {
+  notificationId String    @map("notification_id") @db.Uuid
+  userId         String    @map("user_id") @db.Uuid
+  deliveredAt    DateTime? @map("delivered_at") @db.Timestamptz(6)
+  readAt         DateTime? @map("read_at") @db.Timestamptz(6)
+
+  notification Notification @relation(fields: [notificationId], references: [id], onDelete: Cascade, onUpdate: Cascade)
+  user         User         @relation(fields: [userId], references: [id], onDelete: Cascade, onUpdate: Cascade)
+
+  @@id([notificationId, userId])
+  @@index([userId])
+  @@map("notification_recipients")
+}
+
+// ---------------------------------------------------------------------------
+// Номенклатурная классификация медицинских изделий по видам
+//
+// Загружается из открытых данных Росздравнадзора (ADR 0009). Запись исходного
+// файла описывает пару «вид × путь раздела», поэтому виды и разделы хранятся
+// отдельно, а их связь — в nomenclature_type_sections. Код вида остаётся
+// естественным ключом: в данных ни один код не встречается с разными
+// названиями, хотя сам код повторяется.
+// ---------------------------------------------------------------------------
+
+model NomenclatureSection {
+  id       String  @id @default(uuid()) @db.Uuid
+  /// Иерархический номер: «12», «12.08», «12.08.05».
+  number   String  @unique @db.VarChar(32)
+  name     String  @db.VarChar(512)
+  parentId String? @map("parent_id") @db.Uuid
+
+  parent   NomenclatureSection?  @relation("NomenclatureSectionTree", fields: [parentId], references: [id], onDelete: Restrict, onUpdate: Cascade)
+  children NomenclatureSection[] @relation("NomenclatureSectionTree")
+
+  types NomenclatureTypeSection[]
+
+  @@index([parentId])
+  @@map("nomenclature_sections")
+}
+
+model NomenclatureType {
+  id          String   @id @default(uuid()) @db.Uuid
+  /// Код вида из классификации; уникален, несмотря на повторы строк в файле.
+  code        Int      @unique
+  name        String   @db.VarChar(512)
+  description String?
+  createdAt   DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt   DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  sections NomenclatureTypeSection[]
+  products Product[]
+
+  @@map("nomenclature_types")
+}
+
+/// Вид может входить в несколько разделов; хранится самый глубокий раздел пути.
+model NomenclatureTypeSection {
+  typeId    String @map("type_id") @db.Uuid
+  sectionId String @map("section_id") @db.Uuid
+
+  type    NomenclatureType    @relation(fields: [typeId], references: [id], onDelete: Cascade, onUpdate: Cascade)
+  section NomenclatureSection @relation(fields: [sectionId], references: [id], onDelete: Cascade, onUpdate: Cascade)
+
+  @@id([typeId, sectionId])
+  @@index([sectionId])
+  @@map("nomenclature_type_sections")
+}
+
+// ---------------------------------------------------------------------------
+// Загрузки и будущая интеграция
+// ---------------------------------------------------------------------------
+
+model SyncSource {
+  id        String  @id @default(uuid()) @db.Uuid
+  code      String  @unique @db.VarChar(64)
+  name      String  @db.VarChar(255)
+  baseUrl   String? @map("base_url") @db.VarChar(512)
+  isEnabled Boolean @default(true) @map("is_enabled")
+
+  runs SyncRun[]
+
+  @@map("sync_sources")
+}
+
+model SyncRunStatus {
+  id   String @id @default(uuid()) @db.Uuid
+  code String @unique @db.VarChar(32)
+  name String @db.VarChar(128)
+
+  runs SyncRun[]
+
+  @@map("sync_run_statuses")
+}
+
+model SyncRun {
+  id                String    @id @default(uuid()) @db.Uuid
+  syncSourceId      String    @map("sync_source_id") @db.Uuid
+  statusId          String    @map("status_id") @db.Uuid
+  startedAt         DateTime  @default(now()) @map("started_at") @db.Timestamptz(6)
+  finishedAt        DateTime? @map("finished_at") @db.Timestamptz(6)
+  recordsRead       Int       @default(0) @map("records_read")
+  recordsChanged    Int       @default(0) @map("records_changed")
+  errorCount        Int       @default(0) @map("error_count")
+  errorMessage      String?   @map("error_message") @db.VarChar(1024)
+  initiatedByUserId String?   @map("initiated_by_user_id") @db.Uuid
+
+  syncSource      SyncSource    @relation(fields: [syncSourceId], references: [id], onDelete: Restrict, onUpdate: Cascade)
+  status          SyncRunStatus @relation(fields: [statusId], references: [id], onDelete: Restrict, onUpdate: Cascade)
+  initiatedByUser User?         @relation(fields: [initiatedByUserId], references: [id], onDelete: SetNull, onUpdate: Cascade)
+
+  errors        SyncRunError[]
+  statusHistory RegistryStatusHistory[]
+
+  @@index([syncSourceId])
+  @@index([statusId])
+  @@index([initiatedByUserId])
+  @@index([startedAt])
+  @@map("sync_runs")
+}
+
+model SyncRunError {
+  id               String   @id @default(uuid()) @db.Uuid
+  syncRunId        String   @map("sync_run_id") @db.Uuid
+  externalRecordId String?  @map("external_record_id") @db.VarChar(128)
+  errorCode        String   @map("error_code") @db.VarChar(64)
+  message          String   @db.VarChar(1024)
+  payloadChecksum  String?  @map("payload_checksum") @db.VarChar(64)
+  createdAt        DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  syncRun SyncRun @relation(fields: [syncRunId], references: [id], onDelete: Cascade, onUpdate: Cascade)
+
+  @@index([syncRunId])
+  @@map("sync_run_errors")
+}

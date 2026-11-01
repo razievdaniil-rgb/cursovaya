@@ -1,5 +1,5 @@
-export type UserRole = 'user' | 'organization' | 'government'
-export type RegistryStatus = 'active' | 'changed' | 'expiring' | 'expired'
+export type UserRole = 'user' | 'organization' | 'government' | 'admin'
+export type RegistryStatus = 'active' | 'changed' | 'expiring' | 'expired' | 'suspended' | 'invalid' | 'cancelled'
 
 export interface Manufacturer {
   id: string
@@ -13,7 +13,7 @@ export interface Product {
   name: string
   shortName: string
   category: string
-  origin: 'Россия' | 'Импорт'
+  origin: 'Россия' | 'Импорт' | 'Не указано'
   manufacturer: Manufacturer
   registrationNumber: string
   registryStatus: RegistryStatus
@@ -38,7 +38,7 @@ export interface Review {
   experience: string
   authorType: 'user' | 'organization'
   verifiedOrganization: boolean
-  status: 'moderation' | 'published'
+  status: 'moderation' | 'published' | 'rejected' | 'hidden'
   createdAt: string
 }
 
@@ -52,16 +52,41 @@ export interface Notification {
   title: string
   productName: string
   date: string
-  severity: 'success' | 'warning' | 'danger'
+  severity: 'info' | 'success' | 'warning' | 'danger'
+  read?: boolean
 }
 
 export interface AnalyticsSnapshot {
+  totalProducts?: number
+  unknownOriginProducts?: number
   domesticShare: number
   domesticDelta: number
   signals: number
   criticalSignals: number
   importSubstitution: { year: string; value: number }[]
   dependencies: { category: string; value: number }[]
+  /**
+   * Время последнего обновления кэша аналитики. Есть только у HTTP-адаптера:
+   * показатели читаются из materialized views и могут отставать от записи.
+   */
+  refreshedAt?: string | null
+}
+
+export interface ProblemProduct {
+  id: string
+  name: string
+  registrationNumber: string
+  registryStatus: string
+  reasons: {
+    registrationExpired: boolean
+    registrationExpiring: boolean
+    statusBlocking: boolean
+    criticalReviews: boolean
+    withoutActiveOffers: boolean
+  }
+  averageRating: number | null
+  criticalReviewCount: number
+  activeOfferCount: number
 }
 
 export interface SyncStatus {
@@ -70,6 +95,23 @@ export interface SyncStatus {
   changes: number
   state: 'current' | 'stale' | 'success' | 'error'
   sources: { name: string; records: number; state: 'success' | 'stale' | 'error' }[]
+  /**
+   * Подключён ли настоящий внешний реестр. У демонстрационного источника —
+   * false; интерфейс обязан показывать данные как демонстрационные.
+   */
+  sourceIsReal?: boolean
+  sourceCode?: string
+  sourceName?: string
+  errorCount?: number
+  runs?: { id: string; status: string; startedAt: string; finishedAt: string | null; recordsRead: number; recordsChanged: number; errorCount: number; errorMessage: string | null }[]
+  availableSources?: { code: string; name: string; isReal: boolean; isEnabled: boolean }[]
+}
+
+export interface OrganizationDashboard {
+  notifications: Notification[]
+  saved: Product[]
+  organization?: { name: string; city: string | null; verified: boolean; verificationStatusName: string }
+  counters?: { savedProducts: number; comparisons: number; reviews: number; reviewsOnModeration: number; unreadNotifications: number; members: number }
 }
 
 export interface Session {
@@ -77,9 +119,14 @@ export interface Session {
   email: string
   displayName: string
   verified: boolean
+  /** Все роли пользователя; `role` — основная для навигации. */
+  roles?: UserRole[]
+  organizationId?: string | null
 }
 
 export interface CatalogQuery {
+  page?: number
+  limit?: number
   search?: string
   countries?: string[]
   statuses?: RegistryStatus[]
@@ -89,15 +136,99 @@ export interface CatalogQuery {
   state?: 'default' | 'empty' | 'error'
 }
 
+export interface CatalogPageResult {
+  items: Product[]
+  page: number
+  limit: number
+  total: number
+  totalPages: number
+}
+
+export interface CatalogFilters {
+  totalProducts: number
+  countries: { id: string; iso2: string; name: string; productCount: number }[]
+  categories: { id: string; name: string; slug: string; productCount: number }[]
+  riskClasses: { id: string; code: string; name: string; productCount: number }[]
+  registryStatuses: { id: string; code: string; name: string; productCount: number }[]
+  originTypes: { id: string; code: string; name: string; productCount: number }[]
+  manufacturers: { id: string; name: string; country: string | null; productCount: number }[]
+  price: { currency: string; min: number | null; max: number | null }
+}
+
+export interface SavedProductList {
+  id: string
+  name: string
+  productCount: number
+  productIds: string[]
+}
+
+export interface LoginInput {
+  email: string
+  password: string
+  /**
+   * Используется только демонстрационным адаптером: там роль выбирается в
+   * форме. HTTP-адаптер роль игнорирует — её определяет сервер по user_roles.
+   */
+  role?: UserRole
+}
+
+export interface RegisterInput {
+  email: string
+  password: string
+  role: UserRole
+  organization?: string
+  inn?: string
+}
+
+export type ReviewInput = Pick<
+  Review,
+  'productId' | 'title' | 'body' | 'experience' | 'authorType' | 'rating'
+> & { organizationId?: string }
+
+/**
+ * Единственный контракт между интерфейсом и источником данных.
+ *
+ * Реализаций две: `mockApi` (демонстрационные данные, работает на GitHub
+ * Pages без backend) и `httpApi` (реальный API). Страницы импортируют только
+ * `apiClient` из `src/api/client.ts`, который выбирает реализацию по
+ * переменным сборки. DTO из NestJS во frontend не импортируются.
+ */
 export interface ApiClient {
+  /** Какая реализация активна — нужно интерфейсу для демонстрационных состояний. */
+  readonly mode: 'mock' | 'http'
+
   getCatalog(query?: CatalogQuery): Promise<Product[]>
+  getCatalogPage(query?: CatalogQuery): Promise<CatalogPageResult>
   getProduct(id: string): Promise<Product>
-  submitReview(review: Omit<Review, 'id' | 'status' | 'createdAt' | 'verifiedOrganization'>): Promise<Review>
-  getOrganizationDashboard(): Promise<{ notifications: Notification[]; saved: Product[] }>
+  getProductReviews(id: string): Promise<Review[]>
+  getProductAnalogues(id: string): Promise<Product[]>
+  getCatalogFilters(): Promise<CatalogFilters>
+
+  submitReview(review: ReviewInput): Promise<Review>
+  getMyReviews(): Promise<Review[]>
+
+  getOrganizationDashboard(): Promise<OrganizationDashboard>
+  getNotifications(): Promise<Notification[]>
+  markNotificationRead(id: string): Promise<void>
+
+  getSavedCollections(): Promise<{ id: string; name: string }[]>
+  getSavedProducts(collectionId?: string): Promise<string[]>
+  setProductSaved(productId: string, saved: boolean, collectionId?: string): Promise<string[]>
+
+  getComparisonCollections(): Promise<{ id: string; name: string }[]>
+  getComparisonProducts(collectionId?: string): Promise<string[]>
+  setProductCompared(productId: string, compared: boolean, collectionId?: string): Promise<string[]>
+
   getAnalytics(period?: string, category?: string): Promise<AnalyticsSnapshot>
-  getSyncStatus(state?: SyncStatus['state']): Promise<SyncStatus>
-  login(email: string, role: UserRole): Promise<Session>
-  register(email: string, role: UserRole, organization?: string): Promise<Session>
+  getProblemProducts(): Promise<ProblemProduct[]>
+  getSyncStatus(state?: SyncStatus['state'], sourceCode?: string): Promise<SyncStatus>
+  runSync(sourceCode?: string): Promise<void>
+
+  login(input: LoginInput): Promise<Session>
+  register(input: RegisterInput): Promise<Session>
   recover(email: string): Promise<{ sent: boolean }>
+  confirmRecovery(token: string, password: string): Promise<void>
   logout(): Promise<void>
+  /** Восстановление сессии при загрузке приложения. */
+  getSession(): Promise<Session | null>
 }

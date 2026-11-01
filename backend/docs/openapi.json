@@ -3289,6 +3289,255 @@
         ]
       }
     },
+    "/api/v1/nomenclature": {
+      "get": {
+        "description": "Поиск по названию, описанию и коду. Фильтр sectionNumber включает подразделы: «12.08» вернёт и «12.08.05».",
+        "operationId": "NomenclatureController_list",
+        "parameters": [
+          {
+            "name": "search",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "maxLength": 256
+            }
+          },
+          {
+            "name": "sectionNumber",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "pattern": "^[\\d.]{1,32}$"
+            }
+          },
+          {
+            "name": "page",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "exclusiveMinimum": true,
+              "minimum": 0,
+              "default": 1
+            }
+          },
+          {
+            "name": "limit",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "exclusiveMinimum": true,
+              "minimum": 0,
+              "maximum": 100,
+              "default": 20
+            }
+          }
+        ],
+        "responses": {
+          "422": {
+            "description": "Некорректные параметры запроса",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "type",
+                    "title",
+                    "status"
+                  ],
+                  "properties": {
+                    "type": {
+                      "type": "string",
+                      "format": "uri",
+                      "example": "https://medizdeliya.local/problems/validation-failed"
+                    },
+                    "title": {
+                      "type": "string",
+                      "example": "Некорректные данные запроса"
+                    },
+                    "status": {
+                      "type": "integer",
+                      "example": 422
+                    },
+                    "detail": {
+                      "type": "string"
+                    },
+                    "instance": {
+                      "type": "string"
+                    },
+                    "requestId": {
+                      "type": "string",
+                      "format": "uuid"
+                    },
+                    "errors": {
+                      "type": "object",
+                      "description": "Сообщения по полям; присутствует при 422.",
+                      "additionalProperties": {
+                        "type": "array",
+                        "items": {
+                          "type": "string"
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "summary": "Виды медицинских изделий",
+        "tags": [
+          "nomenclature"
+        ]
+      }
+    },
+    "/api/v1/nomenclature/summary": {
+      "get": {
+        "operationId": "NomenclatureController_summary",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "summary": "Сводка по классификации и последней загрузке",
+        "tags": [
+          "nomenclature"
+        ]
+      }
+    },
+    "/api/v1/nomenclature/sections": {
+      "get": {
+        "description": "Разделы возвращаются деревом; вложенность задана parent_id.",
+        "operationId": "NomenclatureController_sections",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "summary": "Дерево разделов классификации",
+        "tags": [
+          "nomenclature"
+        ]
+      }
+    },
+    "/api/v1/nomenclature/{code}": {
+      "get": {
+        "description": "sectionPaths содержит полные пути разделов, восстановленные обходом дерева: в базе хранится только самый глубокий раздел каждого пути.",
+        "operationId": "NomenclatureController_detail",
+        "parameters": [],
+        "responses": {
+          "404": {
+            "description": "Вид медицинского изделия не найден",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "type",
+                    "title",
+                    "status"
+                  ],
+                  "properties": {
+                    "type": {
+                      "type": "string",
+                      "format": "uri",
+                      "example": "https://medizdeliya.local/problems/validation-failed"
+                    },
+                    "title": {
+                      "type": "string",
+                      "example": "Некорректные данные запроса"
+                    },
+                    "status": {
+                      "type": "integer",
+                      "example": 404
+                    },
+                    "detail": {
+                      "type": "string"
+                    },
+                    "instance": {
+                      "type": "string"
+                    },
+                    "requestId": {
+                      "type": "string",
+                      "format": "uuid"
+                    },
+                    "errors": {
+                      "type": "object",
+                      "description": "Сообщения по полям; присутствует при 422.",
+                      "additionalProperties": {
+                        "type": "array",
+                        "items": {
+                          "type": "string"
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Некорректный код вида",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "type",
+                    "title",
+                    "status"
+                  ],
+                  "properties": {
+                    "type": {
+                      "type": "string",
+                      "format": "uri",
+                      "example": "https://medizdeliya.local/problems/validation-failed"
+                    },
+                    "title": {
+                      "type": "string",
+                      "example": "Некорректные данные запроса"
+                    },
+                    "status": {
+                      "type": "integer",
+                      "example": 422
+                    },
+                    "detail": {
+                      "type": "string"
+                    },
+                    "instance": {
+                      "type": "string"
+                    },
+                    "requestId": {
+                      "type": "string",
+                      "format": "uuid"
+                    },
+                    "errors": {
+                      "type": "object",
+                      "description": "Сообщения по полям; присутствует при 422.",
+                      "additionalProperties": {
+                        "type": "array",
+                        "items": {
+                          "type": "string"
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "summary": "Вид по коду классификации",
+        "tags": [
+          "nomenclature"
+        ]
+      }
+    },
     "/api/v1/government/analytics": {
       "get": {
         "description": "Читаются из materialized views. Поле refreshedAt показывает, когда кэш был обновлён последний раз.",
@@ -3543,6 +3792,124 @@
           }
         ],
         "summary": "Журнал загрузок",
+        "tags": [
+          "government"
+        ]
+      }
+    },
+    "/api/v1/government/sync/nomenclature/run": {
+      "post": {
+        "description": "Настоящий источник: публичный набор Росздравнадзора. В ответе source.isReal = true — в отличие от демонстрационного реестра изделий. Расхождения источника с его схемой попадают в журнал загрузок.",
+        "operationId": "GovernmentController_runNomenclatureSync",
+        "parameters": [],
+        "responses": {
+          "403": {
+            "description": "Требуется роль government",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "type",
+                    "title",
+                    "status"
+                  ],
+                  "properties": {
+                    "type": {
+                      "type": "string",
+                      "format": "uri",
+                      "example": "https://medizdeliya.local/problems/validation-failed"
+                    },
+                    "title": {
+                      "type": "string",
+                      "example": "Некорректные данные запроса"
+                    },
+                    "status": {
+                      "type": "integer",
+                      "example": 403
+                    },
+                    "detail": {
+                      "type": "string"
+                    },
+                    "instance": {
+                      "type": "string"
+                    },
+                    "requestId": {
+                      "type": "string",
+                      "format": "uuid"
+                    },
+                    "errors": {
+                      "type": "object",
+                      "description": "Сообщения по полям; присутствует при 422.",
+                      "additionalProperties": {
+                        "type": "array",
+                        "items": {
+                          "type": "string"
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "502": {
+            "description": "Источник открытых данных недоступен",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "type",
+                    "title",
+                    "status"
+                  ],
+                  "properties": {
+                    "type": {
+                      "type": "string",
+                      "format": "uri",
+                      "example": "https://medizdeliya.local/problems/validation-failed"
+                    },
+                    "title": {
+                      "type": "string",
+                      "example": "Некорректные данные запроса"
+                    },
+                    "status": {
+                      "type": "integer",
+                      "example": 502
+                    },
+                    "detail": {
+                      "type": "string"
+                    },
+                    "instance": {
+                      "type": "string"
+                    },
+                    "requestId": {
+                      "type": "string",
+                      "format": "uuid"
+                    },
+                    "errors": {
+                      "type": "object",
+                      "description": "Сообщения по полям; присутствует при 422.",
+                      "additionalProperties": {
+                        "type": "array",
+                        "items": {
+                          "type": "string"
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Загрузить номенклатурную классификацию из открытых данных",
         "tags": [
           "government"
         ]

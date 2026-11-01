@@ -3,10 +3,19 @@
 Full-stack приложение каталогизации и мониторинга медицинских изделий:
 React-интерфейс и NestJS + PostgreSQL backend с реляционной схемой в 3НФ.
 
-> Данные реестра — демонстрационные. Внешний государственный источник
-> (Росздравнадзор) **не подключён**: загрузки выполняет `MockRegistryProvider`,
-> и API помечает источник как `isReal: false`. См.
-> [ADR 0008](backend/docs/adr/0008-registry-provider.md).
+> **Два источника данных с разным статусом.**
+>
+> *Номенклатурная классификация медицинских изделий по видам* загружается из
+> открытых данных Росздравнадзора: 25 708 видов и 591 раздел, источник
+> помечается `isReal: true`.
+>
+> *Государственный реестр медицинских изделий* (регистрационные записи РЗН)
+> **не подключён**: этот набор открытых данных доступен только через
+> авторизацию в ЕСИА. Его по-прежнему обслуживает `MockRegistryProvider`, и
+> API честно помечает источник как `isReal: false`.
+>
+> Подробности: [ADR 0008](backend/docs/adr/0008-registry-provider.md) и
+> [ADR 0009](backend/docs/adr/0009-roszdravnadzor-open-data.md).
 
 ## Структура
 
@@ -137,6 +146,18 @@ npm run db:migrate:deploy    # применить миграции с нуля
 npm run db:seed              # идемпотентный seed
 npm run db:refresh-views     # обновить materialized views аналитики
 npm run openapi:export       # пересобрать backend/docs/openapi.json
+
+```
+
+Переменные источника номенклатуры (все необязательные):
+
+```env
+# Каталог набора открытых данных; по умолчанию официальный адрес.
+NOMENCLATURE_SOURCE_URL=https://roszdravnadzor.gov.ru/opendata/7710537160-mi_types
+# Конкретная версия выгрузки; по умолчанию первое число текущего месяца.
+NOMENCLATURE_FILE_NAME=data-20261101-structure-20180615.zip
+# Локальный архив или XML вместо обращения к сети (используется тестами).
+NOMENCLATURE_LOCAL_FILE=
 npm run db:migrate:reset     # пересоздать базу целиком
 ```
 
@@ -182,6 +203,18 @@ npm run db:migrate:reset     # пересоздать базу целиком
 `price-desc`, `rating-desc`, `name-asc`, `newest`. Пагинация `page`/`limit`.
 Повторяющийся параметр и значения через запятую равнозначны.
 
+### Номенклатурная классификация
+
+| Метод | Путь | Доступ |
+| --- | --- | --- |
+| GET | `/nomenclature` | открыт |
+| GET | `/nomenclature/sections` | открыт |
+| GET | `/nomenclature/summary` | открыт |
+| GET | `/nomenclature/:code` | открыт |
+
+Фильтр `sectionNumber` включает подразделы: `12.08` вернёт и `12.08.05`.
+У вида может быть несколько путей разделов; полный путь восстанавливается
+обходом дерева, потому что в базе хранится только самый глубокий раздел.
 ### Отзывы
 
 | Метод | Путь | Доступ |
@@ -230,6 +263,7 @@ npm run db:migrate:reset     # пересоздать базу целиком
 | GET | `/government/sync` | `government`, `admin` |
 | GET | `/government/sync/runs/:runId/errors` | `government`, `admin` |
 | POST | `/government/sync/run` | `government`, `admin` |
+| POST | `/government/sync/nomenclature/run` | `government`, `admin` |
 
 ### Служебное
 

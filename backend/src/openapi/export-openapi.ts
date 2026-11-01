@@ -66,6 +66,12 @@ const REQUIRED_OPERATIONS: [string, string][] = [
   ['get', '/api/v1/government/problem-products'],
   ['get', '/api/v1/government/sync'],
   ['post', '/api/v1/government/sync/run'],
+  ['post', '/api/v1/government/sync/nomenclature/run'],
+
+  ['get', '/api/v1/nomenclature'],
+  ['get', '/api/v1/nomenclature/sections'],
+  ['get', '/api/v1/nomenclature/summary'],
+  ['get', '/api/v1/nomenclature/{code}'],
 ];
 
 async function main(): Promise<void> {

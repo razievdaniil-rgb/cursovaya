@@ -56,6 +56,18 @@ export const envSchema = z.object({
     .default('false')
     .transform((value) => value === 'true'),
 
+  /**
+   * Источник номенклатурной классификации медицинских изделий.
+   *
+   * Адрес и имя файла вынесены в окружение, потому что схема именования
+   * выгрузки официально не описана и выведена из перечня версий на странице
+   * набора (ADR 0009). NOMENCLATURE_LOCAL_FILE позволяет загрузить ранее
+   * скачанный архив или XML, не обращаясь к сети, — так работают тесты.
+   */
+  NOMENCLATURE_SOURCE_URL: z.string().url().optional(),
+  NOMENCLATURE_FILE_NAME: z.string().min(1).optional(),
+  NOMENCLATURE_LOCAL_FILE: z.string().min(1).optional(),
+
   /** Только для локального seed, в рантайме не используется. */
   SEED_DEV_PASSWORD: z.string().optional(),
 }).superRefine((env, ctx) => {

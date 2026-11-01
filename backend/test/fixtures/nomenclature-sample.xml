@@ -1,0 +1,114 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Фикстура повторяет особенности настоящей выгрузки Росздравнадзора,
+  обнаруженные при разборе файла от 01.11.2026 (ADR 0009):
+    * один код встречается несколько раз с одинаковым названием, но разными
+      путями разделов;
+    * многострочные name и description;
+    * пустой section_number;
+    * пустое section_name;
+    * section_name, который выглядит номером (поля перепутаны в источнике);
+    * один и тот же номер раздела с пустым и непустым названием;
+    * один и тот же номер раздела с пустым и непустым родителем.
+-->
+<classificator_list>
+	<classificator>
+		<code>100010</code>
+		<name>RA33 антитела ИВД, набор, иммуноферментный анализ (ИФА)</name>
+		<description>Набор реагентов для определения анти-RA33 антител методом ИФА.</description>
+		<sections>
+			<section>
+				<section_number>5</section_number>
+				<section_name>Медицинские изделия для диагностики in vitro</section_name>
+				<parent_number></parent_number>
+			</section>
+			<section>
+				<section_number>5.04</section_number>
+				<section_name>Реагенты/наборы для определения аналитов ИВД</section_name>
+				<parent_number>5</parent_number>
+			</section>
+			<section>
+				<section_number>5.04.02</section_number>
+				<section_name>Реагенты/наборы для биохимического анализа</section_name>
+				<parent_number>5.04</parent_number>
+			</section>
+		</sections>
+	</classificator>
+	<classificator>
+		<code>100260</code>
+		<name>Система ультразвуковой костной денситометрии</name>
+		<description>Набор устройств для измерения плотности костной ткани.</description>
+		<sections>
+			<section>
+				<section_number>12</section_number>
+				<section_name>Медицинские изделия для диагностической визуализации</section_name>
+				<parent_number></parent_number>
+			</section>
+			<section>
+				<section_number>12.07</section_number>
+				<section_name>Денситометры костные</section_name>
+				<parent_number>12</parent_number>
+			</section>
+		</sections>
+	</classificator>
+	<classificator>
+		<code>100260</code>
+		<name>Система ультразвуковой костной денситометрии</name>
+		<description>Набор устройств для измерения плотности костной ткани.</description>
+		<sections>
+			<section>
+				<section_number>12</section_number>
+				<section_name>Медицинские изделия для диагностической визуализации</section_name>
+				<parent_number></parent_number>
+			</section>
+			<section>
+				<section_number>12.08</section_number>
+				<section_name>Системы радионуклидной визуализации</section_name>
+				<parent_number>12</parent_number>
+			</section>
+			<section>
+				<section_number>12.08.05</section_number>
+				<section_name>Денситометры радионуклидные</section_name>
+				<parent_number>12.08</parent_number>
+			</section>
+		</sections>
+	</classificator>
+	<classificator>
+		<code>200100</code>
+		<name>Монитор пациента
+			многопараметрический</name>
+		<description>Прибор для непрерывного наблюдения
+			за физиологическими показателями пациента.</description>
+		<sections>
+			<section>
+				<section_number>5.04</section_number>
+				<section_name></section_name>
+				<parent_number></parent_number>
+			</section>
+		</sections>
+	</classificator>
+	<classificator>
+		<code>300100</code>
+		<name>Изделие без раздела</name>
+		<description>У этой записи номер раздела в источнике пуст.</description>
+		<sections>
+			<section>
+				<section_number></section_number>
+				<section_name>Раздел без номера</section_name>
+				<parent_number></parent_number>
+			</section>
+		</sections>
+	</classificator>
+	<classificator>
+		<code>400100</code>
+		<name>Изделие с перепутанными полями раздела</name>
+		<description>В источнике номер и название раздела меняются местами.</description>
+		<sections>
+			<section>
+				<section_number>67</section_number>
+				<section_name>5.04</section_name>
+				<parent_number></parent_number>
+			</section>
+		</sections>
+	</classificator>
+</classificator_list>

@@ -42,6 +42,8 @@
     "@prisma/client": "^6.17.0",
     "reflect-metadata": "^0.2.2",
     "rxjs": "^7.8.2",
+    "saxes": "^6.0.0",
+    "yauzl": "^3.4.0",
     "zod": "^3.25.76",
     "zod-to-json-schema": "^3.24.6"
   },
@@ -52,6 +54,7 @@
     "@nestjs/testing": "^11.1.6",
     "@swc/core": "^1.16.21",
     "@types/node": "^24.13.3",
+    "@types/yauzl": "^3.4.0",
     "@typescript-eslint/eslint-plugin": "^8.46.0",
     "@typescript-eslint/parser": "^8.46.0",
     "eslint": "^9.38.0",

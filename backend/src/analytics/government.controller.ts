@@ -14,6 +14,7 @@ import {
   type SyncQueryInput,
   type SyncRunInput,
 } from '../sync/sync.schema';
+import { NomenclatureSyncService } from '../sync/nomenclature/nomenclature-sync.service';
 import { SyncService } from '../sync/sync.service';
 import { analyticsQuerySchema, type AnalyticsQueryInput } from './analytics.schema';
 import { AnalyticsService } from './analytics.service';
@@ -31,6 +32,7 @@ export class GovernmentController {
   constructor(
     private readonly analytics: AnalyticsService,
     private readonly sync: SyncService,
+    private readonly nomenclatureSync: NomenclatureSyncService,
   ) {}
 
   @Get('analytics')
@@ -79,6 +81,20 @@ export class GovernmentController {
     @Query(new ZodValidationPipe(syncQuerySchema)) query: SyncQueryInput,
   ) {
     return this.sync.getStatus(query);
+  }
+
+  @Post('sync/nomenclature/run')
+  @ApiProblemResponse(403, 'Требуется роль government')
+  @ApiProblemResponse(502, 'Источник открытых данных недоступен')
+  @ApiOperation({
+    summary: 'Загрузить номенклатурную классификацию из открытых данных',
+    description:
+      'Настоящий источник: публичный набор Росздравнадзора. В ответе ' +
+      'source.isReal = true — в отличие от демонстрационного реестра изделий. ' +
+      'Расхождения источника с его схемой попадают в журнал загрузок.',
+  })
+  async runNomenclatureSync(@CurrentUser() user: RequestUser) {
+    return this.nomenclatureSync.run(user.id);
   }
 
   @Get('sync/runs/:runId/errors')

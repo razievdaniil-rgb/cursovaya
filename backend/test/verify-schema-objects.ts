@@ -67,7 +67,7 @@ const EXPECTED_SPECIAL_INDEXES = [
   'domestic_share_by_period_view_pk',
 ];
 
-const EXPECTED_TABLE_COUNT = 50;
+const EXPECTED_TABLE_COUNT = 53;
 
 const failures: string[] = [];
 
@@ -146,7 +146,8 @@ async function main(): Promise<void> {
     ),
   );
 
-  // Таблицы: 18 справочников + 32 таблицы предметной области.
+  // Таблицы: 18 справочников + 35 таблиц предметной области (включая
+  // номенклатурную классификацию из открытых данных, ADR 0009).
   // _prisma_migrations исключается — это служебная таблица Prisma.
   const [tableCount] = await prisma.$queryRawUnsafe<{ count: bigint }[]>(
     `SELECT count(*) AS count

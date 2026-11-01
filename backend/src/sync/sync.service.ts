@@ -2,6 +2,7 @@ import { Inject, Injectable, Logger } from '@nestjs/common';
 
 import { Problems } from '../common/problem';
 import { PrismaService } from '../prisma/prisma.service';
+import { RoszdravnadzorNomenclatureProvider } from './nomenclature/roszdravnadzor-nomenclature.provider';
 import {
   REGISTRY_PROVIDER,
   type RegistryFetchScenario,
@@ -74,6 +75,10 @@ export class SyncService {
       lastUpdatedAt: lastSuccessful?.finishedAt ?? null,
       records: lastSuccessful?.recordsRead ?? 0,
       changes: lastSuccessful?.recordsChanged ?? 0,
+      // Источников два, и у них разный статус: демонстрационный реестр и
+      // настоящая номенклатура из открытых данных (ADR 0009). Интерфейс
+      // обязан различать их, поэтому список отдаётся целиком.
+      sources: await this.listSources(),
       runs: runs.map((run) => ({
         id: run.id,
         status: run.status.code,
@@ -88,6 +93,61 @@ export class SyncService {
         initiatedBy: run.initiatedByUser,
       })),
     };
+  }
+
+  /**
+   * Все зарегистрированные источники с их последними загрузками.
+   *
+   * `isReal` берётся из описания провайдера, а не из базы: признак
+   * «подключён настоящий источник» — свойство кода, а не данных, и подменить
+   * его записью в таблице нельзя.
+   */
+  private async listSources() {
+    const real = new Set([RoszdravnadzorNomenclatureProvider.CODE]);
+
+    const sources = await this.prisma.syncSource.findMany({
+      orderBy: { code: 'asc' },
+      select: {
+        id: true,
+        code: true,
+        name: true,
+        baseUrl: true,
+        isEnabled: true,
+        runs: {
+          orderBy: { startedAt: 'desc' },
+          take: 1,
+          select: {
+            startedAt: true,
+            finishedAt: true,
+            recordsRead: true,
+            recordsChanged: true,
+            errorCount: true,
+            status: { select: { code: true } },
+          },
+        },
+      },
+    });
+
+    return sources.map((source) => {
+      const last = source.runs[0];
+      return {
+        code: source.code,
+        name: source.name,
+        baseUrl: source.baseUrl,
+        isEnabled: source.isEnabled,
+        isReal: real.has(source.code),
+        lastRun: last
+          ? {
+              status: last.status.code,
+              startedAt: last.startedAt,
+              finishedAt: last.finishedAt,
+              recordsRead: last.recordsRead,
+              recordsChanged: last.recordsChanged,
+              errorCount: last.errorCount,
+            }
+          : null,
+      };
+    });
   }
 
   /**

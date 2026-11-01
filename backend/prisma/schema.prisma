@@ -329,6 +329,7 @@ model Product {
   riskClassId             String    @map("risk_class_id") @db.Uuid
   originTypeId            String    @map("origin_type_id") @db.Uuid
   currentRegistryStatusId String    @map("current_registry_status_id") @db.Uuid
+  nomenclatureTypeId      String?   @map("nomenclature_type_id") @db.Uuid
   name                    String    @db.VarChar(512)
   shortName               String    @map("short_name") @db.VarChar(255)
   registrationNumber      String    @unique @map("registration_number") @db.VarChar(64)
@@ -344,6 +345,7 @@ model Product {
   riskClass             RiskClass         @relation(fields: [riskClassId], references: [id], onDelete: Restrict, onUpdate: Cascade)
   originType            ProductOriginType @relation(fields: [originTypeId], references: [id], onDelete: Restrict, onUpdate: Cascade)
   currentRegistryStatus RegistryStatus    @relation(fields: [currentRegistryStatusId], references: [id], onDelete: Restrict, onUpdate: Cascade)
+  nomenclatureType      NomenclatureType? @relation(fields: [nomenclatureTypeId], references: [id], onDelete: SetNull, onUpdate: Cascade)
 
   images               ProductImage[]
   documents            ProductDocument[]
@@ -363,6 +365,7 @@ model Product {
   @@index([riskClassId])
   @@index([originTypeId])
   @@index([currentRegistryStatusId])
+  @@index([nomenclatureTypeId])
   @@index([registrationExpiresAt])
   // Триграммный индекс для подстрочного поиска «21851» внутри «РЗН 2024/21851».
   @@index([registrationNumber(ops: raw("gin_trgm_ops"))], type: Gin, map: "products_registration_number_trgm_idx")
@@ -802,6 +805,60 @@ model NotificationRecipient {
   @@id([notificationId, userId])
   @@index([userId])
   @@map("notification_recipients")
+}
+
+// ---------------------------------------------------------------------------
+// Номенклатурная классификация медицинских изделий по видам
+//
+// Загружается из открытых данных Росздравнадзора (ADR 0009). Запись исходного
+// файла описывает пару «вид × путь раздела», поэтому виды и разделы хранятся
+// отдельно, а их связь — в nomenclature_type_sections. Код вида остаётся
+// естественным ключом: в данных ни один код не встречается с разными
+// названиями, хотя сам код повторяется.
+// ---------------------------------------------------------------------------
+
+model NomenclatureSection {
+  id       String  @id @default(uuid()) @db.Uuid
+  /// Иерархический номер: «12», «12.08», «12.08.05».
+  number   String  @unique @db.VarChar(32)
+  name     String  @db.VarChar(512)
+  parentId String? @map("parent_id") @db.Uuid
+
+  parent   NomenclatureSection?  @relation("NomenclatureSectionTree", fields: [parentId], references: [id], onDelete: Restrict, onUpdate: Cascade)
+  children NomenclatureSection[] @relation("NomenclatureSectionTree")
+
+  types NomenclatureTypeSection[]
+
+  @@index([parentId])
+  @@map("nomenclature_sections")
+}
+
+model NomenclatureType {
+  id          String   @id @default(uuid()) @db.Uuid
+  /// Код вида из классификации; уникален, несмотря на повторы строк в файле.
+  code        Int      @unique
+  name        String   @db.VarChar(512)
+  description String?
+  createdAt   DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt   DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  sections NomenclatureTypeSection[]
+  products Product[]
+
+  @@map("nomenclature_types")
+}
+
+/// Вид может входить в несколько разделов; хранится самый глубокий раздел пути.
+model NomenclatureTypeSection {
+  typeId    String @map("type_id") @db.Uuid
+  sectionId String @map("section_id") @db.Uuid
+
+  type    NomenclatureType    @relation(fields: [typeId], references: [id], onDelete: Cascade, onUpdate: Cascade)
+  section NomenclatureSection @relation(fields: [sectionId], references: [id], onDelete: Cascade, onUpdate: Cascade)
+
+  @@id([typeId, sectionId])
+  @@index([sectionId])
+  @@map("nomenclature_type_sections")
 }
 
 // ---------------------------------------------------------------------------

@@ -69,7 +69,29 @@ jobs:
           cache-dependency-path: backend/package-lock.json
 
       - name: Install dependencies
-        run: npm ci
+        id: install
+        run: |
+          set -o pipefail
+          node --version
+          npm --version
+          npm ci 2>&1 | tee /tmp/npm-ci.log
+
+      - name: Показать ошибку установки
+        if: failure() && steps.install.outcome == 'failure'
+        # Текст попадает в сводку задания, а её видно через REST API —
+        # без этого в CI остаётся только «exit code 1» без причины.
+        run: |
+          echo "## npm ci не прошёл" >> "$GITHUB_STEP_SUMMARY"
+          echo '```' >> "$GITHUB_STEP_SUMMARY"
+          tail -n 60 /tmp/npm-ci.log >> "$GITHUB_STEP_SUMMARY" 2>/dev/null || echo "нет /tmp/npm-ci.log" >> "$GITHUB_STEP_SUMMARY"
+          echo '```' >> "$GITHUB_STEP_SUMMARY"
+          LOG=$(ls -t "$HOME"/.npm/_logs/*.log 2>/dev/null | head -1)
+          if [ -n "$LOG" ]; then
+            echo "## npm debug log" >> "$GITHUB_STEP_SUMMARY"
+            echo '```' >> "$GITHUB_STEP_SUMMARY"
+            tail -n 80 "$LOG" >> "$GITHUB_STEP_SUMMARY"
+            echo '```' >> "$GITHUB_STEP_SUMMARY"
+          fi
 
       - name: Применить миграции с нуля
         run: npm run db:migrate:deploy

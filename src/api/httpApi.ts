@@ -2,6 +2,7 @@ import type {
   AnalyticsSnapshot,
   ApiClient,
   CatalogFilters,
+  CatalogPageResult,
   CatalogQuery,
   LoginInput,
   Notification,
@@ -203,6 +204,7 @@ export function createHttpApi(baseUrl: string): ApiClient {
    */
   let accessToken: string | null = null
   let refreshPromise: Promise<boolean> | null = null
+  let organizationId: string | null = null
 
   async function rawRequest(path: string, init: RequestInit): Promise<Response> {
     return fetch(`${root}${path}`, {
@@ -254,7 +256,7 @@ export function createHttpApi(baseUrl: string): ApiClient {
   async function request<T>(
     path: string,
     init: RequestInit = {},
-    options: { retryOn401?: boolean } = {},
+    options: { retryOn401?: boolean; envelope?: boolean } = {},
   ): Promise<T> {
     const retryOn401 = options.retryOn401 ?? true
     let response = await rawRequest(path, init)
@@ -278,7 +280,7 @@ export function createHttpApi(baseUrl: string): ApiClient {
       )
     }
 
-    return (payload as Envelope<T>).data
+    return options.envelope ? payload as T : (payload as Envelope<T>).data
   }
 
   // --- Преобразование ответов в типы интерфейса -----------------------------
@@ -379,6 +381,7 @@ export function createHttpApi(baseUrl: string): ApiClient {
     roles: string[]
     organizations: { id: string; verified: boolean }[]
   }): Session {
+    organizationId = user.organizations[0]?.id ?? null
     const roles = user.roles as UserRole[]
     // Основная роль определяет кабинет: государственный раздел важнее
     // кабинета организации, тот — важнее обычного пользователя.
@@ -473,6 +476,22 @@ export function createHttpApi(baseUrl: string): ApiClient {
       return products.map((product) => toProduct(product))
     },
 
+    async getCatalogPage(query: CatalogQuery = {}): Promise<CatalogPageResult> {
+      const page = Number.isSafeInteger(query.page) && query.page! > 0 ? query.page! : 1
+      const limit = Number.isSafeInteger(query.limit) && query.limit! > 0 ? Math.min(query.limit!, 100) : 20
+      if (query.state === 'error') throw new Error('Не удалось получить данные каталога')
+      if (query.state === 'empty') return { items: [], page, limit, total: 0, totalPages: 1 }
+      const params = buildCatalogParams(query)
+      params.set('page', String(page))
+      params.set('limit', String(limit))
+      const response = await request<Envelope<ApiProductSummary[]>>(
+        `/products?${params}`, {}, { envelope: true },
+      )
+      const meta = response.meta as Omit<CatalogPageResult, 'items'> | undefined
+      if (!meta) throw new Error('API не вернул пагинацию каталога')
+      return { items: response.data.map((product) => toProduct(product)), page: meta.page, limit: meta.limit, total: meta.total, totalPages: meta.totalPages }
+    },
+
     async getProduct(id: string) {
       const [detail, documents] = await Promise.all([
         request<ApiProductDetail>(`/products/${id}`),
@@ -510,6 +529,7 @@ export function createHttpApi(baseUrl: string): ApiClient {
           title: input.title,
           body: input.body,
           experience: EXPERIENCE_TO_API[input.experience] ?? 'over_6_months',
+          ...(input.authorType === 'organization' && input.organizationId ? { organizationId: input.organizationId } : {}),
         }),
       })
 
@@ -523,6 +543,8 @@ export function createHttpApi(baseUrl: string): ApiClient {
 
     async getOrganizationDashboard() {
       const dashboard = await request<{
+        organization: { name: string; city: string | null; verified: boolean; verificationStatusName: string }
+        counters: { savedProducts: number; comparisons: number; reviews: number; reviewsOnModeration: number; unreadNotifications: number; members: number }
         savedProducts: {
           id: string
           name: string
@@ -544,6 +566,8 @@ export function createHttpApi(baseUrl: string): ApiClient {
       }>('/organization/dashboard')
 
       return {
+        organization: dashboard.organization,
+        counters: dashboard.counters,
         notifications: dashboard.notifications.map((notification) => ({
           id: notification.id,
           title: notification.title,
@@ -603,8 +627,12 @@ export function createHttpApi(baseUrl: string): ApiClient {
       await request<unknown>(`/me/notifications/${id}/read`, { method: 'PATCH' })
     },
 
-    async getSavedProducts() {
-      const lists = await request<{ id: string }[]>('/saved-lists')
+    async getSavedCollections() {
+      return request<{ id: string; name: string }[]>('/saved-lists')
+    },
+
+    async getSavedProducts(collectionId?: string) {
+      const lists = collectionId ? [{ id: collectionId }] : await request<{ id: string }[]>('/saved-lists')
       if (lists.length === 0) return []
 
       const detail = await request<{ items: { product: { id: string } }[] }>(
@@ -613,13 +641,13 @@ export function createHttpApi(baseUrl: string): ApiClient {
       return detail.items.map((item) => item.product.id)
     },
 
-    async setProductSaved(productId: string, saved: boolean) {
-      let lists = await request<{ id: string }[]>('/saved-lists')
+    async setProductSaved(productId: string, saved: boolean, collectionId?: string) {
+      let lists = collectionId ? [{ id: collectionId }] : await request<{ id: string }[]>('/saved-lists')
 
       if (lists.length === 0) {
         const created = await request<{ id: string }>('/saved-lists', {
           method: 'POST',
-          body: JSON.stringify({ name: 'Сохранённые изделия' }),
+          body: JSON.stringify({ name: 'Сохранённые изделия', ...(organizationId ? { organizationId } : {}) }),
         })
         lists = [created]
       }
@@ -633,8 +661,13 @@ export function createHttpApi(baseUrl: string): ApiClient {
       return detail.items.map((item) => item.product.id)
     },
 
-    async getComparisonProducts() {
-      const comparisons = await request<{ id: string }[]>('/comparisons')
+    async getComparisonCollections() {
+      const rows = await request<{ id: string; name: string | null }[]>('/comparisons')
+      return rows.map((row) => ({ ...row, name: row.name ?? 'Сравнение изделий' }))
+    },
+
+    async getComparisonProducts(collectionId?: string) {
+      const comparisons = collectionId ? [{ id: collectionId }] : await request<{ id: string }[]>('/comparisons')
       if (comparisons.length === 0) return []
 
       const detail = await request<{ items: { product: { id: string } }[] }>(
@@ -643,8 +676,8 @@ export function createHttpApi(baseUrl: string): ApiClient {
       return detail.items.map((item) => item.product.id)
     },
 
-    async setProductCompared(productId: string, compared: boolean) {
-      let comparisons = await request<{ id: string }[]>('/comparisons')
+    async setProductCompared(productId: string, compared: boolean, collectionId?: string) {
+      let comparisons = collectionId ? [{ id: collectionId }] : await request<{ id: string }[]>('/comparisons')
 
       if (comparisons.length === 0) {
         const created = await request<{ id: string }>('/comparisons', {
@@ -676,6 +709,8 @@ export function createHttpApi(baseUrl: string): ApiClient {
       if (categoryId) params.set('categoryId', categoryId)
 
       const snapshot = await request<{
+        totalProducts: number
+        unknownOriginProducts: number
         refreshedAt: string | null
         domesticShare: number
         domesticDelta: number
@@ -692,24 +727,24 @@ export function createHttpApi(baseUrl: string): ApiClient {
       return request<ProblemProduct[]>('/government/problem-products')
     },
 
-    async getSyncStatus(state?: SyncStatus['state']) {
-      if (state === 'error') throw new Error('Источник данных временно недоступен')
-
+    async getSyncStatus(_state?: SyncStatus['state'], sourceCode = 'roszdravnadzor-registry') {
       const status = await request<{
-        source: { name: string; isReal: boolean }
+        source: { code: string; name: string; isReal: boolean }
         state: 'current' | 'stale' | 'error' | 'empty'
         lastUpdatedAt: string | null
         records: number
         changes: number
-        runs: { status: string; recordsRead: number; statusName: string }[]
-      }>('/government/sync')
+        errorCount: number
+        sources: { code: string; name: string; isReal: boolean; isEnabled: boolean }[]
+        runs: { id: string; status: string; recordsRead: number; recordsChanged: number; statusName: string; startedAt: string; finishedAt: string | null; errorCount: number; errorMessage: string | null }[]
+      }>(`/government/sync?source=${encodeURIComponent(sourceCode)}`)
 
       return {
         lastUpdatedAt: formatDateTime(status.lastUpdatedAt),
         records: status.records,
         changes: status.changes,
         // «empty» в интерфейсе не предусмотрено — показывается как устаревшее.
-        state: state ?? (status.state === 'empty' ? 'stale' : status.state),
+        state: status.state === 'empty' ? 'stale' : status.state,
         sources: status.runs.slice(0, 4).map((run) => ({
           name: run.statusName,
           records: run.recordsRead,
@@ -721,11 +756,19 @@ export function createHttpApi(baseUrl: string): ApiClient {
                 : ('stale' as const),
         })),
         sourceIsReal: status.source.isReal,
+        sourceCode: status.source.code,
+        sourceName: status.source.name,
+        errorCount: status.errorCount,
+        runs: status.runs,
+        availableSources: status.sources,
       }
     },
 
-    async runSync() {
-      await request<unknown>('/government/sync/run', {
+    async runSync(sourceCode = 'roszdravnadzor-registry') {
+      const path = sourceCode === 'roszdravnadzor-registry' ? '/government/sync/registry/run'
+        : sourceCode === 'roszdravnadzor-nomenclature' ? '/government/sync/nomenclature/run'
+        : '/government/sync/run'
+      await request<unknown>(path, {
         method: 'POST',
         body: JSON.stringify({ scenario: 'success' }),
       })
@@ -782,11 +825,20 @@ export function createHttpApi(baseUrl: string): ApiClient {
       return { sent: true }
     },
 
+    async confirmRecovery(token: string, password: string) {
+      await request<unknown>('/auth/recovery/confirm', {
+        method: 'POST', body: JSON.stringify({ token, password }),
+      }, { retryOn401: false })
+      accessToken = null
+      setSessionHint(false)
+    },
+
     async logout() {
       try {
         await request<unknown>('/auth/logout', { method: 'POST' }, { retryOn401: false })
       } finally {
         accessToken = null
+        organizationId = null
         setSessionHint(false)
       }
     },

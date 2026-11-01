@@ -64,6 +64,28 @@ afterEach(() => {
 })
 
 describe('httpApi: каталог', () => {
+  it('requests one bounded page and preserves backend totals', async () => {
+    responder = () => ({ body: { data: [productSummary], meta: { page: 3, limit: 10, total: 1864, totalPages: 187 } } })
+    const result = await createHttpApi(API).getCatalogPage({ page: 3, limit: 10, countries: ['Россия'] })
+    expect(result).toMatchObject({ page: 3, limit: 10, total: 1864, totalPages: 187, items: [{ id: 'p1' }] })
+    expect(calls).toHaveLength(1)
+    const params = new URL(calls[0].url).searchParams
+    expect(params.get('page')).toBe('3')
+    expect(params.get('limit')).toBe('10')
+    expect(params.get('countryIso2')).toBe('RU')
+  })
+
+  it('bounds pagination and keeps demo states local', async () => {
+    responder = () => ({ body: { data: [], meta: { page: 1, limit: 100, total: 0, totalPages: 1 } } })
+    const api = createHttpApi(API)
+    await api.getCatalogPage({ page: -2, limit: 1000 })
+    expect(new URL(calls[0].url).searchParams.get('limit')).toBe('100')
+    expect(new URL(calls[0].url).searchParams.get('page')).toBe('1')
+    await expect(api.getCatalogPage({ state: 'empty' })).resolves.toMatchObject({ items: [], total: 0 })
+    await expect(api.getCatalogPage({ state: 'error' })).rejects.toThrow('Не удалось получить данные каталога')
+    expect(calls).toHaveLength(1)
+  })
+
   it.each([
     { category: null, riskClass: null, originType: null, country: null },
     { category: { name: null }, riskClass: { code: null }, originType: { code: null }, country: { name: null } },

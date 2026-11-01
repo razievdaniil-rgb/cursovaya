@@ -9,7 +9,7 @@ import styles from './Layout.module.css'
 
 const publicNav = [
   { to: '/catalog', label: 'Каталог' }, { to: '/compare', label: 'Сравнение' },
-  { to: '/products/mp-12/review', label: 'Отзывы' },
+  { to: '/reviews', label: 'Отзывы' },
 ]
 
 function GlobalHeader() {
@@ -26,7 +26,7 @@ function GlobalHeader() {
       <Logo/>
       <nav className={styles.desktopNav} aria-label="Основная навигация">{navigation.map((item) => <NavLink key={item.to} to={item.to} className={({ isActive }) => isActive ? styles.active : ''}>{item.label}</NavLink>)}</nav>
       <div className={styles.headerActions}>
-        <Badge tone="success">Данные обновлены</Badge>
+        <Badge tone={apiClient.mode === 'mock' ? 'warning' : 'accent'}>{apiClient.mode === 'mock' ? 'Демонстрация' : 'Каталог изделий'}</Badge>
         {session ? <button className={styles.profile} onClick={() => navigate(session.role === 'government' ? '/government/analytics' : session.role === 'organization' ? '/organization' : '/catalog')}><Icon name="user" size={20}/><span>{session.displayName}</span></button> : <Button variant="secondary" onClick={() => navigate('/auth/login', { state: { from: location.pathname } })}>Войти</Button>}
         {session && <button className={styles.logout} onClick={logout} aria-label="Выйти"><Icon name="back" size={20}/></button>}
       </div>
@@ -45,7 +45,7 @@ export function AppLayout() {
 
 const orgNav = [
   { to: '/organization', label: 'Обзор', icon: 'diagnostics' as const }, { to: '/catalog', label: 'Каталог', icon: 'search' as const },
-  { to: '/compare', label: 'Сравнения', icon: 'sliders' as const }, { to: '/products/mp-12/review', label: 'Отзывы', icon: 'star' as const },
+  { to: '/compare', label: 'Сравнения', icon: 'sliders' as const }, { to: '/reviews', label: 'Отзывы', icon: 'star' as const },
 ]
 const govNav = [
   { to: '/government/analytics', label: 'Аналитика', icon: 'diagnostics' as const }, { to: '/catalog', label: 'Каталог', icon: 'search' as const },

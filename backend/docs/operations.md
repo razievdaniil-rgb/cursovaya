@@ -117,6 +117,10 @@ Backend: `npm run typecheck`, `npm run lint`, `npm run test:unit`,
 `npm run test:integration`, `npm run openapi:export`.
 Integration-тесты запускайте на отдельной базе с миграциями и demo seed,
 никогда на рабочем зеркале реестра. Они создают и удаляют фикстуры.
+Для registry-тестов имя базы должно начинаться на `cursovaya_test_` или
+`cursovaya_completion_`; задайте точное имя в `REGISTRY_TEST_DATABASE_NAME`.
+Проверка имени выполняется до создания Prisma-клиента, чтобы случайно
+не запустить очистку фикстур на рабочей базе.
 
 Frontend: `npm run typecheck`, `npm run lint`, `npm test`, `npm run build`,
 `npm run test:e2e`. Для HTTP smoke соберите с `VITE_API_URL`, задайте

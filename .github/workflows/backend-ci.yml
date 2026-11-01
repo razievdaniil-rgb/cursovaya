@@ -109,7 +109,7 @@ jobs:
       postgres:
         image: postgres:17
         env:
-          POSTGRES_DB: medizdeliya_test
+          POSTGRES_DB: cursovaya_test_ci
           POSTGRES_USER: medizdeliya
           POSTGRES_PASSWORD: medizdeliya_ci
           # Обязательно: при locale=C русский стемминг не работает (см. docker-compose.yml)
@@ -117,13 +117,14 @@ jobs:
         ports:
           - 5432:5432
         options: >-
-          --health-cmd "pg_isready -U medizdeliya -d medizdeliya_test"
+          --health-cmd "pg_isready -U medizdeliya -d cursovaya_test_ci"
           --health-interval 5s
           --health-timeout 5s
           --health-retries 20
 
     env:
-      DATABASE_URL: postgresql://medizdeliya:medizdeliya_ci@localhost:5432/medizdeliya_test?schema=public
+      DATABASE_URL: postgresql://medizdeliya:medizdeliya_ci@localhost:5432/cursovaya_test_ci?schema=public
+      REGISTRY_TEST_DATABASE_NAME: cursovaya_test_ci
       JWT_ACCESS_SECRET: ci_only_access_secret_at_least_32_chars_long
       JWT_REFRESH_SECRET: ci_only_refresh_secret_at_least_32_chars_long
       FRONTEND_ORIGINS: http://localhost:5173

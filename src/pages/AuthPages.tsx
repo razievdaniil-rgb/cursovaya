@@ -1,9 +1,9 @@
-import { useState, type ReactNode } from 'react'
+import { useEffect, useState, type ReactNode } from 'react'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { useForm } from 'react-hook-form'
 import { Link, Navigate, useLocation, useNavigate } from 'react-router-dom'
 import { z } from 'zod'
-import { apiClient } from '../api/client'
+import { apiClient, isMockMode } from '../api/client'
 import { useAppStore } from '../store/appStore'
 import type { UserRole } from '../types'
 
@@ -24,12 +24,12 @@ type LoginValues = z.infer<typeof loginSchema>
 
 export function LoginPage() {
   const current = useAppStore((s) => s.session); const setSession = useAppStore((s) => s.setSession); const navigate = useNavigate(); const location = useLocation()
-  const { register, handleSubmit, formState: { errors, isSubmitting } } = useForm<LoginValues>({ resolver: zodResolver(loginSchema), defaultValues: { role: 'organization', email: 'name@hospital.ru', password: '1234567890', remember: true } })
+  const { register, handleSubmit, setError, formState: { errors, isSubmitting } } = useForm<LoginValues>({ resolver: zodResolver(loginSchema), defaultValues: { role: 'organization', email: isMockMode ? 'name@hospital.ru' : '', password: isMockMode ? '1234567890' : '', remember: true } })
   if (current) return <Navigate to={current.role === 'government' ? '/government/analytics' : current.role === 'organization' ? '/organization' : '/catalog'} replace/>
   // role передаётся для демонстрационного адаптера; HTTP-адаптер её
   // игнорирует — роли приходят с сервера из user_roles.
-  const submit = handleSubmit(async (values) => { const session = await apiClient.login({ email: values.email, password: values.password, role: values.role }); setSession(session); const requested = (location.state as { from?: string } | null)?.from; navigate(requested || (session.role === 'government' ? '/government/analytics' : session.role === 'organization' ? '/organization' : '/catalog'), { replace: true }) })
-  return <AuthShell title="Вход в систему" subtitle="Используйте рабочую учётную запись."><Card className={styles.authCard}><form onSubmit={submit}><SelectField label="Тип учётной записи" {...register('role')}><option value="user">Пользователь</option><option value="organization">Медицинская организация</option><option value="government">Государственный орган</option></SelectField><Field label="Электронная почта" icon="mail" error={errors.email?.message} {...register('email')}/><Field label="Пароль" icon="lock" type="password" error={errors.password?.message} {...register('password')}/><div className={styles.authOptions}><label><input type="checkbox" {...register('remember')}/>Запомнить меня</label><Link to="/auth/recovery">Восстановить пароль</Link></div><Button disabled={isSubmitting}>{isSubmitting ? 'Вход…' : 'Войти'}</Button><div className={styles.authDivider}/><div className={styles.authRegister}><span>Нет учётной записи?</span><Button type="button" variant="secondary" onClick={() => navigate('/auth/register')}>Зарегистрироваться</Button></div><div className={styles.authInfo}><Icon name="shield" size={20}/>Доступ к разделам зависит от выбранной роли</div></form></Card></AuthShell>
+  const submit = handleSubmit(async (values) => { try { const session = await apiClient.login({ email: values.email, password: values.password, role: values.role }); setSession(session); const requested = (location.state as { from?: string } | null)?.from; navigate(requested || (session.role === 'government' ? '/government/analytics' : session.role === 'organization' ? '/organization' : '/catalog'), { replace: true }) } catch (cause) { setError('root', { message: cause instanceof Error ? cause.message : 'Не удалось войти' }) } })
+  return <AuthShell title="Вход в систему" subtitle="Используйте рабочую учётную запись."><Card className={styles.authCard}><form onSubmit={submit}>{errors.root && <p role="alert">{errors.root.message}</p>}<SelectField label="Тип учётной записи" {...register('role')}><option value="user">Пользователь</option><option value="organization">Медицинская организация</option><option value="government">Государственный орган</option></SelectField><Field label="Электронная почта" icon="mail" error={errors.email?.message} {...register('email')}/><Field label="Пароль" icon="lock" type="password" error={errors.password?.message} {...register('password')}/><div className={styles.authOptions}><label><input type="checkbox" {...register('remember')}/>Запомнить меня</label><Link to="/auth/recovery">Восстановить пароль</Link></div><Button disabled={isSubmitting}>{isSubmitting ? 'Вход…' : 'Войти'}</Button><div className={styles.authDivider}/><div className={styles.authRegister}><span>Нет учётной записи?</span><Button type="button" variant="secondary" onClick={() => navigate('/auth/register')}>Зарегистрироваться</Button></div><div className={styles.authInfo}><Icon name="shield" size={20}/>Доступ к разделам зависит от выбранной роли</div></form></Card></AuthShell>
 }
 
 const registerSchema = z.object({ role: z.enum(['user','organization','government']), organization: z.string().min(3, 'Введите наименование'), inn: z.string().regex(/^\d{10,12}$/, 'ИНН содержит 10 или 12 цифр'), email: z.string().email('Введите корректную почту'), password: z.string().min(10, 'Введите не менее 10 символов'), consent: z.literal(true, { message: 'Необходимо согласие' }) })
@@ -37,15 +37,37 @@ type RegisterValues = z.infer<typeof registerSchema>
 
 export function RegisterPage() {
   const [role, setRole] = useState<RegistrationRole>('organization'); const setSession = useAppStore((s) => s.setSession); const navigate = useNavigate()
-  const { register, handleSubmit, setValue, formState: { errors, isSubmitting } } = useForm<RegisterValues>({ resolver: zodResolver(registerSchema), defaultValues: { role, organization: 'ГБУЗ «ГКБ № 52 ДЗМ»', inn: '7734253700', email: 'name@hospital.ru', password: '1234567890', consent: true } })
+  const { register, handleSubmit, setValue, setError, formState: { errors, isSubmitting } } = useForm<RegisterValues>({ resolver: zodResolver(registerSchema), defaultValues: { role, organization: 'ГБУЗ «ГКБ № 52 ДЗМ»', inn: '7734253700', email: 'name@hospital.ru', password: '1234567890', consent: true } })
   const changeRole = (next: RegistrationRole) => { setRole(next); setValue('role', next) }
-  const submit = handleSubmit(async (values) => { const session = await apiClient.register({ email: values.email, password: values.password, role: values.role, organization: values.organization, inn: values.inn }); setSession(session); navigate(session.role === 'government' ? '/government/analytics' : session.role === 'organization' ? '/organization' : '/catalog') })
-  return <AuthShell title="Создание учётной записи" subtitle="Укажите роль и сведения для проверки доступа."><Card className={`${styles.authCard} ${styles.registerCard}`}><form onSubmit={submit}><fieldset className={styles.rolePicker}><legend>Роль пользователя</legend><div>{([['user','Пользователь','user'],['organization','Медорганизация','building'],['government','Государственный орган','shield']] as const).map(([value,label,icon]) => <button type="button" key={value} className={role === value ? styles.roleActive : ''} onClick={() => changeRole(value)}><Icon name={icon}/><span>{label}</span></button>)}</div><input type="hidden" {...register('role')}/></fieldset><Field label="Наименование организации" icon="building" error={errors.organization?.message} {...register('organization')}/><div className={styles.formColumns}><Field label="ИНН организации" icon="shield" error={errors.inn?.message} {...register('inn')}/><Field label="Рабочая почта" icon="mail" error={errors.email?.message} {...register('email')}/></div><Field label="Пароль" icon="lock" type="password" error={errors.password?.message} {...register('password')}/><label className={styles.checkbox}><input type="checkbox" {...register('consent')}/><span>Принимаю условия обработки персональных данных</span></label>{errors.consent && <small className={styles.error}>{errors.consent.message}</small>}<Button disabled={isSubmitting}>{isSubmitting ? 'Создание…' : 'Создать учётную запись'}</Button><p className={styles.authCaption}>Проверка организации выполняется после регистрации</p></form></Card></AuthShell>
+  const submit = handleSubmit(async (values) => { try { const session = await apiClient.register({ email: values.email, password: values.password, role: values.role, organization: values.organization, inn: values.inn }); setSession(session); navigate(session.role === 'government' ? '/government/analytics' : session.role === 'organization' ? '/organization' : '/catalog') } catch (cause) { setError('root', { message: cause instanceof Error ? cause.message : 'Не удалось создать учётную запись' }) } })
+  return <AuthShell title="Создание учётной записи" subtitle="Укажите роль и сведения для проверки доступа."><Card className={`${styles.authCard} ${styles.registerCard}`}><form onSubmit={submit}>{errors.root && <p role="alert">{errors.root.message}</p>}<fieldset className={styles.rolePicker}><legend>Роль пользователя</legend><div>{([['user','Пользователь','user'],['organization','Медорганизация','building'],['government','Государственный орган','shield']] as const).map(([value,label,icon]) => <button type="button" key={value} disabled={!isMockMode && value === 'government'} className={role === value ? styles.roleActive : ''} onClick={() => changeRole(value)}><Icon name={icon}/><span>{label}</span></button>)}</div><input type="hidden" {...register('role')}/></fieldset><Field label="Наименование организации" icon="building" error={errors.organization?.message} {...register('organization')}/><div className={styles.formColumns}><Field label="ИНН организации" icon="shield" error={errors.inn?.message} {...register('inn')}/><Field label="Рабочая почта" icon="mail" error={errors.email?.message} {...register('email')}/></div><Field label="Пароль" icon="lock" type="password" error={errors.password?.message} {...register('password')}/><label className={styles.checkbox}><input type="checkbox" {...register('consent')}/><span>Принимаю условия обработки персональных данных</span></label>{errors.consent && <small className={styles.error}>{errors.consent.message}</small>}<Button disabled={isSubmitting}>{isSubmitting ? 'Создание…' : 'Создать учётную запись'}</Button><p className={styles.authCaption}>Проверка организации выполняется после регистрации</p></form></Card></AuthShell>
 }
 
 const recoverySchema = z.object({ email: z.string().email('Введите корректную почту') })
 export function RecoveryPage() {
-  const [sent, setSent] = useState(false); const { register, handleSubmit, formState: { errors, isSubmitting } } = useForm<{ email: string }>({ resolver: zodResolver(recoverySchema), defaultValues: { email: 'name@hospital.ru' } })
-  const submit = handleSubmit(async ({ email }) => { await apiClient.recover(email); setSent(true) })
-  return <AuthShell title="Восстановление доступа" subtitle="Ссылка для смены пароля будет направлена на рабочую почту."><Card className={`${styles.authCard} ${styles.recoveryCard}`}><form onSubmit={submit}><Field label="Электронная почта" icon="mail" error={errors.email?.message} {...register('email')}/><Button disabled={isSubmitting}>{isSubmitting ? 'Отправка…' : 'Отправить ссылку'}</Button>{sent && <div className={styles.recoveryNote} role="status"><Icon name="mail"/><div><strong>Проверьте входящие сообщения</strong><span>Ссылка действительна 30 минут. При необходимости проверьте папку «Спам».</span></div></div>}<Link className={styles.backLink} to="/auth/login"><Icon name="back" size={20}/>Вернуться ко входу</Link></form></Card></AuthShell>
+  const [sent, setSent] = useState(false)
+  const [error, setError] = useState('')
+  const [token] = useState(() => new URLSearchParams(window.location.hash.slice(1)).get('token'))
+  useEffect(() => {
+    if (token) window.history.replaceState(null, '', window.location.pathname + window.location.search)
+  }, [token])
+  const emailForm = useForm<{ email: string }>({ resolver: zodResolver(recoverySchema) })
+  const passwordForm = useForm<{ password: string }>({ resolver: zodResolver(z.object({ password: z.string().min(10, 'Введите не менее 10 символов').max(128) })) })
+  const submitEmail = emailForm.handleSubmit(async ({ email }) => {
+    setError('')
+    try { await apiClient.recover(email); setSent(true) }
+    catch (cause) { setError(cause instanceof Error ? cause.message : 'Не удалось отправить письмо') }
+  })
+  const submitPassword = passwordForm.handleSubmit(async ({ password }) => {
+    setError('')
+    try { await apiClient.confirmRecovery(token!, password); useAppStore.getState().setSession(null); setSent(true) }
+    catch (cause) { setError(cause instanceof Error ? cause.message : 'Не удалось сменить пароль') }
+  })
+  return <AuthShell title={token ? 'Новый пароль' : 'Восстановление доступа'} subtitle={token ? 'После смены пароля войдите заново.' : 'Ссылка для смены пароля будет направлена на рабочую почту.'}><Card className={`${styles.authCard} ${styles.recoveryCard}`}>
+    {sent ? <p role="status">{token ? 'Пароль изменён. Войдите с новым паролем.' : 'Если учётная запись существует, письмо со ссылкой отправлено. Ссылка действительна 30 минут.'}</p>
+      : token ? <form onSubmit={submitPassword}><Field label="Новый пароль" type="password" autoComplete="new-password" error={passwordForm.formState.errors.password?.message} {...passwordForm.register('password')}/><Button disabled={passwordForm.formState.isSubmitting}>Сменить пароль</Button></form>
+      : <form onSubmit={submitEmail}><Field label="Электронная почта" type="email" error={emailForm.formState.errors.email?.message} {...emailForm.register('email')}/><Button disabled={emailForm.formState.isSubmitting}>Отправить ссылку</Button></form>}
+    {error && <p role="alert">{error}</p>}
+    <Link className={styles.backLink} to="/auth/login"><Icon name="back" size={20}/>Вернуться ко входу</Link>
+  </Card></AuthShell>
 }

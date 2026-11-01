@@ -163,7 +163,7 @@ test.describe('Интерфейс на HTTP API', () => {
     await expect(page.getByText('75', { exact: false }).first()).toBeVisible()
   })
 
-  test('журнал загрузок помечает источник демонстрационным', async ({ page }) => {
+  test('журнал демонстрационного источника не выдаёт его за реестр', async ({ page }) => {
     await page.goto('/auth/login')
     await page.getByLabel('Электронная почта').fill('gov@medizdeliya.local')
     await page.getByLabel('Пароль').fill(seedPassword)
@@ -180,7 +180,7 @@ test.describe('Интерфейс на HTTP API', () => {
           candidate.url().startsWith(`${apiUrl}/government/sync`) &&
           candidate.status() === 200,
       ),
-      page.goto('/government/sync'),
+      page.goto('/government/sync?source=mock-registry'),
     ])
 
     const payload = await response.json()
@@ -191,6 +191,33 @@ test.describe('Интерфейс на HTTP API', () => {
     expect(payload.data.source.baseUrl).toBeNull()
 
     await expect(page.getByRole('heading', { name: /Синхронизаци|загрузок|реестр/ }).first()).toBeVisible()
+  })
+
+  test('сравнение и избранное нового пользователя сохраняются на сервере', async ({ page }, testInfo) => {
+    const email = `collections-${testInfo.project.name}-${Date.now()}@e2e.example.test`
+    const password = 'Collections-Smoke-Password-2026'
+    const registered = await page.request.post(`${apiUrl}/auth/register`, {
+      data: { email, password, displayName: 'Collections smoke' },
+    })
+    expect(registered.status()).toBe(201)
+    await page.goto('/auth/login')
+    await page.getByLabel('Электронная почта').fill(email)
+    await page.getByLabel('Пароль').fill(password)
+    await page.getByRole('button', { name: 'Войти' }).click()
+    await expect(page).toHaveURL(/catalog/)
+    await page.goto(`/products/${mp12Id}`)
+    await page.getByRole('button', { name: 'Добавить к сравнению', exact: true }).click()
+    await expect(page.getByRole('button', { name: 'Добавлено к сравнению', exact: true })).toBeVisible()
+    await page.getByRole('button', { name: 'Сохранить', exact: true }).click()
+    await expect(page.getByRole('button', { name: 'Сохранено', exact: true })).toBeVisible()
+    await page.reload()
+    await expect(page.getByRole('button', { name: 'Добавлено к сравнению', exact: true })).toBeVisible()
+    await expect(page.getByRole('button', { name: 'Сохранено', exact: true })).toBeVisible()
+    await page.goto('/compare')
+    await page.getByRole('button', { name: 'Удалить Монитор пациента МП-12', exact: true }).click()
+    await expect(page.getByText('Список сравнения пуст')).toBeVisible()
+    await page.reload()
+    await expect(page.getByText('Список сравнения пуст')).toBeVisible()
   })
 
   test('каталог открыт без авторизации', async ({ page }) => {

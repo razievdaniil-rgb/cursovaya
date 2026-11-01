@@ -92,6 +92,13 @@ export const mockApi: ApiClient = {
     return result
   },
 
+  async getCatalogPage(query: CatalogQuery = {}) {
+    const page = Number.isSafeInteger(query.page) && query.page! > 0 ? query.page! : 1
+    const limit = Number.isSafeInteger(query.limit) && query.limit! > 0 ? Math.min(query.limit!, 100) : 20
+    const items = await mockApi.getCatalog(query)
+    return { items: items.slice((page - 1) * limit, page * limit), page, limit, total: items.length, totalPages: Math.max(1, Math.ceil(items.length / limit)) }
+  },
+
   async getProduct(id) {
     await wait(150)
     const product = products.find((item) => item.id === id)
@@ -178,7 +185,12 @@ export const mockApi: ApiClient = {
 
   async getOrganizationDashboard() {
     await wait()
-    return { notifications, saved: products.filter((product) => savedIds.includes(product.id)) }
+    return {
+      notifications,
+      saved: products.filter((product) => savedIds.includes(product.id)),
+      organization: { name: session?.displayName ?? 'Демонстрационная организация', city: 'Москва', verified: session?.verified ?? false, verificationStatusName: session?.verified ? 'Подтверждена' : 'Ожидает подтверждения' },
+      counters: { savedProducts: savedIds.length, comparisons: comparedIds.length ? 1 : 0, reviews: submittedReviews.length, reviewsOnModeration: submittedReviews.filter((r) => r.status === 'moderation').length, unreadNotifications: notifications.filter((n) => !n.read).length, members: 1 },
+    }
   },
 
   async getNotifications(): Promise<Notification[]> {
@@ -189,6 +201,9 @@ export const mockApi: ApiClient = {
   async markNotificationRead() {
     await wait(80)
   },
+
+  async getSavedCollections() { return [{ id: 'demo-saved', name: 'Сохранённые изделия' }] },
+  async getComparisonCollections() { return [{ id: 'demo-comparison', name: 'Сравнение изделий' }] },
 
   async getSavedProducts() {
     await wait(80)
@@ -291,6 +306,8 @@ export const mockApi: ApiClient = {
     await wait()
     return { sent: true }
   },
+
+  async confirmRecovery() { await wait(100) },
 
   async logout() {
     await wait(80)

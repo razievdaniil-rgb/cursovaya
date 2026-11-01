@@ -57,6 +57,8 @@ export interface Notification {
 }
 
 export interface AnalyticsSnapshot {
+  totalProducts?: number
+  unknownOriginProducts?: number
   domesticShare: number
   domesticDelta: number
   signals: number
@@ -98,6 +100,18 @@ export interface SyncStatus {
    * false; интерфейс обязан показывать данные как демонстрационные.
    */
   sourceIsReal?: boolean
+  sourceCode?: string
+  sourceName?: string
+  errorCount?: number
+  runs?: { id: string; status: string; startedAt: string; finishedAt: string | null; recordsRead: number; recordsChanged: number; errorCount: number; errorMessage: string | null }[]
+  availableSources?: { code: string; name: string; isReal: boolean; isEnabled: boolean }[]
+}
+
+export interface OrganizationDashboard {
+  notifications: Notification[]
+  saved: Product[]
+  organization?: { name: string; city: string | null; verified: boolean; verificationStatusName: string }
+  counters?: { savedProducts: number; comparisons: number; reviews: number; reviewsOnModeration: number; unreadNotifications: number; members: number }
 }
 
 export interface Session {
@@ -111,6 +125,8 @@ export interface Session {
 }
 
 export interface CatalogQuery {
+  page?: number
+  limit?: number
   search?: string
   countries?: string[]
   statuses?: RegistryStatus[]
@@ -118,6 +134,14 @@ export interface CatalogQuery {
   price?: string[]
   sort?: 'recommended' | 'price-asc' | 'rating-desc'
   state?: 'default' | 'empty' | 'error'
+}
+
+export interface CatalogPageResult {
+  items: Product[]
+  page: number
+  limit: number
+  total: number
+  totalPages: number
 }
 
 export interface CatalogFilters {
@@ -159,7 +183,7 @@ export interface RegisterInput {
 export type ReviewInput = Pick<
   Review,
   'productId' | 'title' | 'body' | 'experience' | 'authorType' | 'rating'
->
+> & { organizationId?: string }
 
 /**
  * Единственный контракт между интерфейсом и источником данных.
@@ -174,6 +198,7 @@ export interface ApiClient {
   readonly mode: 'mock' | 'http'
 
   getCatalog(query?: CatalogQuery): Promise<Product[]>
+  getCatalogPage(query?: CatalogQuery): Promise<CatalogPageResult>
   getProduct(id: string): Promise<Product>
   getProductReviews(id: string): Promise<Review[]>
   getProductAnalogues(id: string): Promise<Product[]>
@@ -182,24 +207,27 @@ export interface ApiClient {
   submitReview(review: ReviewInput): Promise<Review>
   getMyReviews(): Promise<Review[]>
 
-  getOrganizationDashboard(): Promise<{ notifications: Notification[]; saved: Product[] }>
+  getOrganizationDashboard(): Promise<OrganizationDashboard>
   getNotifications(): Promise<Notification[]>
   markNotificationRead(id: string): Promise<void>
 
-  getSavedProducts(): Promise<string[]>
-  setProductSaved(productId: string, saved: boolean): Promise<string[]>
+  getSavedCollections(): Promise<{ id: string; name: string }[]>
+  getSavedProducts(collectionId?: string): Promise<string[]>
+  setProductSaved(productId: string, saved: boolean, collectionId?: string): Promise<string[]>
 
-  getComparisonProducts(): Promise<string[]>
-  setProductCompared(productId: string, compared: boolean): Promise<string[]>
+  getComparisonCollections(): Promise<{ id: string; name: string }[]>
+  getComparisonProducts(collectionId?: string): Promise<string[]>
+  setProductCompared(productId: string, compared: boolean, collectionId?: string): Promise<string[]>
 
   getAnalytics(period?: string, category?: string): Promise<AnalyticsSnapshot>
   getProblemProducts(): Promise<ProblemProduct[]>
-  getSyncStatus(state?: SyncStatus['state']): Promise<SyncStatus>
-  runSync(): Promise<void>
+  getSyncStatus(state?: SyncStatus['state'], sourceCode?: string): Promise<SyncStatus>
+  runSync(sourceCode?: string): Promise<void>
 
   login(input: LoginInput): Promise<Session>
   register(input: RegisterInput): Promise<Session>
   recover(email: string): Promise<{ sent: boolean }>
+  confirmRecovery(token: string, password: string): Promise<void>
   logout(): Promise<void>
   /** Восстановление сессии при загрузке приложения. */
   getSession(): Promise<Session | null>

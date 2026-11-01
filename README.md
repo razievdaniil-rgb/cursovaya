@@ -136,8 +136,112 @@ npm run build
 npm run db:migrate:deploy    # применить миграции с нуля
 npm run db:seed              # идемпотентный seed
 npm run db:refresh-views     # обновить materialized views аналитики
+npm run openapi:export       # пересобрать backend/docs/openapi.json
 npm run db:migrate:reset     # пересоздать базу целиком
 ```
+
+---
+
+## HTTP API
+
+Базовый путь — `/api/v1`. Полное описание генерируется из кода:
+[`backend/docs/openapi.json`](backend/docs/openapi.json), интерактивно —
+<http://localhost:3000/api/v1/docs>.
+
+Успешный ответ всегда обёрнут в `{ "data": ... }`; списки добавляют `meta`
+с `page`, `limit`, `total`, `totalPages`. Ошибки — RFC 9457
+(`application/problem+json`) с полями `type`, `title`, `status`, `detail`,
+`instance`, `requestId`; при 422 добавляется `errors` с сообщениями по полям.
+
+### Авторизация
+
+| Метод | Путь | Доступ |
+| --- | --- | --- |
+| POST | `/auth/register` | открыт, 5 запросов в минуту |
+| POST | `/auth/login` | открыт, 10 запросов в минуту |
+| POST | `/auth/refresh` | по refresh-cookie |
+| POST | `/auth/logout` | открыт |
+| POST | `/auth/recovery/request` | открыт, 3 запроса в минуту |
+| POST | `/auth/recovery/confirm` | открыт, 5 запросов в минуту |
+| GET | `/auth/me` | авторизованный |
+
+### Каталог
+
+| Метод | Путь | Доступ |
+| --- | --- | --- |
+| GET | `/products` | открыт |
+| GET | `/products/:id` | открыт |
+| GET | `/products/:id/analogues` | открыт |
+| GET | `/products/:id/reviews` | открыт |
+| GET | `/products/:id/documents` | открыт |
+| GET | `/catalog/filters` | открыт |
+
+Фильтры `/products`: `search`, `categorySlug`, `categoryId`,
+`manufacturerId`, `countryIso2`, `status`, `riskClass`, `originType`,
+`priceMin`, `priceMax`. Сортировка `sort`: `recommended`, `price-asc`,
+`price-desc`, `rating-desc`, `name-asc`, `newest`. Пагинация `page`/`limit`.
+Повторяющийся параметр и значения через запятую равнозначны.
+
+### Отзывы
+
+| Метод | Путь | Доступ |
+| --- | --- | --- |
+| POST | `/products/:id/reviews` | авторизованный |
+| GET | `/me/reviews` | авторизованный |
+| GET | `/admin/reviews` | `admin` |
+| PATCH | `/admin/reviews/:id/status` | `admin` |
+| GET | `/admin/reviews/:id/history` | `admin` |
+
+### Списки и сравнения
+
+| Метод | Путь | Доступ |
+| --- | --- | --- |
+| GET POST | `/saved-lists` | авторизованный |
+| GET PATCH DELETE | `/saved-lists/:listId` | владелец |
+| POST DELETE | `/saved-lists/:listId/products/:productId` | владелец |
+| GET POST | `/comparisons` | авторизованный |
+| GET PATCH DELETE | `/comparisons/:comparisonId` | владелец |
+| POST DELETE | `/comparisons/:comparisonId/products/:productId` | владелец |
+
+### Уведомления
+
+| Метод | Путь | Доступ |
+| --- | --- | --- |
+| GET | `/me/notifications` | авторизованный |
+| PATCH | `/me/notifications/:id/read` | получатель |
+| PATCH | `/me/notifications/read-all` | авторизованный |
+
+### Кабинет организации
+
+| Метод | Путь | Доступ |
+| --- | --- | --- |
+| GET | `/organization/dashboard` | `organization` + членство |
+| GET | `/organization/members` | `organization` + членство |
+| GET | `/organization/notifications` | `organization` + членство |
+| PATCH | `/organization/notifications/:id/read` | `organization` + членство |
+
+### Государственный раздел
+
+| Метод | Путь | Доступ |
+| --- | --- | --- |
+| GET | `/government/analytics` | `government`, `admin` |
+| POST | `/government/analytics/refresh` | `government`, `admin` |
+| GET | `/government/problem-products` | `government`, `admin` |
+| GET | `/government/sync` | `government`, `admin` |
+| GET | `/government/sync/runs/:runId/errors` | `government`, `admin` |
+| POST | `/government/sync/run` | `government`, `admin` |
+
+### Служебное
+
+| Метод | Путь | Доступ |
+| --- | --- | --- |
+| GET | `/health` | открыт |
+| GET | `/docs`, `/docs.json` | открыт |
+
+Описания запросов в OpenAPI строятся из тех же схем Zod, которыми выполняется
+валидация, поэтому документация не может разойтись с поведением сервера.
+Схемы успешных ответов отдельными моделями пока не объявлены — форма ответа
+описана в общем виде выше.
 
 ---
 
@@ -201,7 +305,9 @@ ER-диаграммы, таблицы с PK/FK/UNIQUE/CHECK, функциона�
 - [x] **8. Unit, integration и e2e тесты** — 26 unit и 133 integration на
       backend, 26 unit на frontend, 12 smoke-тестов интерфейса против живого
       API и 12 e2e демо на mock-адаптере.
-- [ ] 9. CI, README и OpenAPI по всем разделам.
+- [x] **9. CI, README и OpenAPI** — описания запросов построены из схем Zod,
+      `backend/docs/openapi.json` экспортируется командой и проверяется в CI
+      на полноту и расхождение с кодом, список эндпоинтов приведён выше.
 - [ ] 10. Полный прогон frontend и backend матрицы тестов.
 
 ### Что проверено

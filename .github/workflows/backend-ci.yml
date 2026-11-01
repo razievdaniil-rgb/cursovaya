@@ -149,6 +149,14 @@ jobs:
       - name: Integration-тесты
         run: npm run test:integration
 
+      - name: OpenAPI описывает все эндпоинты из CLAUDE.md
+        # Скрипт строит документ из тех же контроллеров и схем Zod, которые
+        # обслуживают запросы, и падает, если обязательной операции нет.
+        run: npm run openapi:export
+
+      - name: Экспортированный OpenAPI не разошёлся с кодом
+        run: git diff --exit-code -- docs/openapi.json
+
   # Проверка связки frontend ↔ API: интерфейс собирается с VITE_API_URL и
   # работает против поднятого backend с применённым seed. Демо на
   # mock-адаптере проверяется отдельно в e2e без E2E_API_URL.

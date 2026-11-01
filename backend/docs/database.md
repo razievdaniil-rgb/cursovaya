@@ -7,6 +7,7 @@
 | --- | --- |
 | `20261031120000_init` | расширения `citext`, `pg_trgm`; 50 таблиц; PK, FK, UNIQUE, индексы |
 | `20261031120100_constraints_and_views` | CHECK-ограничения, триггеры поискового индекса, views, materialized views, функции обновления |
+| `20261101000000_analytics_refreshed_at` | колонка `refreshed_at` в двух materialized views аналитики |
 
 Применение с нуля — одной командой:
 
@@ -928,8 +929,8 @@ current_registry_status_id` обновляется той же транзакц�
 | `product_catalog_view` | view | `products` + справочники + два предыдущих view | готовая карточка каталога |
 | `problem_products_view` | view | `products`, `registry_statuses`, `reviews`, `supplier_offers` | истекающая/истёкшая/приостановленная регистрация, критические отзывы, отсутствие действующих предложений |
 | `organization_dashboard_view` | view | `saved_lists`, `comparisons`, `reviews`, `notification_recipients`, `organization_members` | счётчики кабинета медорганизации |
-| `category_import_dependency_view` | materialized view | `products`, `product_origin_types`, `product_categories` | доля импортных изделий по категориям |
-| `domestic_share_by_period_view` | materialized view | `products`, `product_origin_types` | доля отечественных изделий по годам нарастающим итогом |
+| `category_import_dependency_view` | materialized view | `products`, `product_origin_types`, `product_categories` | доля импортных изделий по категориям, `refreshed_at` |
+| `domestic_share_by_period_view` | materialized view | `products`, `product_origin_types` | доля отечественных изделий по годам нарастающим итогом, `refreshed_at` |
 | `product_search_documents` | таблица-кэш | `products`, `manufacturers` | `tsvector` для полнотекстового поиска |
 
 ### Обновление производных объектов
@@ -938,6 +939,12 @@ current_registry_status_id` обновляется той же транзакц�
 | --- | --- |
 | пять обычных view | не требуют обновления, считаются при запросе |
 | два materialized view | `SELECT refresh_analytics_views(true)` — вызывается `SyncService` после успешного `sync_run` и по расписанию через `npm run db:refresh-views` |
+
+Время последнего обновления кэша аналитики читается из самих представлений:
+в каждое добавлена колонка `now() AS refreshed_at`, которая внутри
+`REFRESH MATERIALIZED VIEW` вычисляется как timestamp транзакции обновления.
+Отдельная таблица-журнал для этого не нужна, а API возвращает значение в поле
+`refreshedAt` (ADR 0006).
 | `product_search_documents` | триггеры `products_search_document_sync` (INSERT/UPDATE изделия) и `manufacturers_search_document_sync` (переименование производителя); полная пересборка — `SELECT rebuild_all_product_search_documents()` |
 
 ---

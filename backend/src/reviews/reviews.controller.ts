@@ -5,6 +5,7 @@ import { ROLE } from '../auth/auth.constants';
 import { CurrentUser } from '../auth/current-user.decorator';
 import type { RequestUser } from '../auth/jwt-auth.guard';
 import { Roles } from '../auth/roles.guard';
+import { ApiProblemResponse, ApiZodBody, ApiZodQuery } from '../common/openapi';
 import { ZodValidationPipe } from '../common/zod-validation.pipe';
 import { productIdSchema } from '../products/products.schema';
 import {
@@ -25,6 +26,12 @@ export class ReviewsController {
   constructor(private readonly reviews: ReviewsService) {}
 
   @Post('products/:id/reviews')
+  @ApiZodBody(createReviewSchema)
+  @ApiProblemResponse(401, 'Требуется авторизация')
+  @ApiProblemResponse(403, 'Нет доступа к указанной организации')
+  @ApiProblemResponse(404, 'Изделие не найдено')
+  @ApiProblemResponse(409, 'Отзыв на это изделие уже оставлен')
+  @ApiProblemResponse(422, 'Некорректные данные отзыва')
   @ApiOperation({
     summary: 'Создать отзыв',
     description:
@@ -40,6 +47,8 @@ export class ReviewsController {
   }
 
   @Get('me/reviews')
+  @ApiZodQuery(myReviewsQuerySchema)
+  @ApiProblemResponse(401, 'Требуется авторизация')
   @ApiOperation({ summary: 'Мои отзывы, включая находящиеся на модерации' })
   async mine(
     @CurrentUser() user: RequestUser,
@@ -50,6 +59,8 @@ export class ReviewsController {
 
   @Get('admin/reviews')
   @Roles(ROLE.admin)
+  @ApiZodQuery(myReviewsQuerySchema)
+  @ApiProblemResponse(403, 'Требуется роль admin')
   @ApiOperation({ summary: 'Очередь модерации' })
   async queue(
     @Query(new ZodValidationPipe(myReviewsQuerySchema)) query: MyReviewsQueryInput,
@@ -59,6 +70,10 @@ export class ReviewsController {
 
   @Patch('admin/reviews/:id/status')
   @Roles(ROLE.admin)
+  @ApiZodBody(moderateReviewSchema)
+  @ApiProblemResponse(403, 'Требуется роль admin')
+  @ApiProblemResponse(404, 'Отзыв не найден')
+  @ApiProblemResponse(409, 'Отзыв уже находится в этом статусе')
   @ApiOperation({
     summary: 'Сменить статус отзыва',
     description:

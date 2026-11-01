@@ -12,6 +12,7 @@ import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
 
 import { CurrentUser } from '../auth/current-user.decorator';
 import type { RequestUser } from '../auth/jwt-auth.guard';
+import { ApiProblemResponse, ApiZodBody } from '../common/openapi';
 import { ZodValidationPipe } from '../common/zod-validation.pipe';
 import {
   comparisonIdSchema,
@@ -36,6 +37,8 @@ export class ComparisonsController {
   }
 
   @Post()
+  @ApiZodBody(createComparisonSchema)
+  @ApiProblemResponse(401, 'Требуется авторизация')
   @ApiOperation({ summary: 'Создать сравнение' })
   async create(
     @Body(new ZodValidationPipe(createComparisonSchema)) input: CreateComparisonInput,
@@ -59,6 +62,8 @@ export class ComparisonsController {
   }
 
   @Patch(':comparisonId')
+  @ApiZodBody(updateComparisonSchema)
+  @ApiProblemResponse(404, 'Сравнение не найдено')
   @ApiOperation({ summary: 'Переименовать сравнение' })
   async update(
     @Param(new ZodValidationPipe(comparisonIdSchema)) params: { comparisonId: string },
@@ -79,6 +84,8 @@ export class ComparisonsController {
   }
 
   @Post(':comparisonId/products/:productId')
+  @ApiProblemResponse(404, 'Сравнение или изделие не найдены')
+  @ApiProblemResponse(409, 'Достигнут предел в три изделия либо изделие уже добавлено')
   @ApiOperation({
     summary: 'Добавить изделие в сравнение',
     description:

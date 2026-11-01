@@ -5,6 +5,7 @@ import { ROLE } from '../auth/auth.constants';
 import { CurrentUser } from '../auth/current-user.decorator';
 import type { RequestUser } from '../auth/jwt-auth.guard';
 import { Roles } from '../auth/roles.guard';
+import { ApiProblemResponse, ApiZodBody, ApiZodQuery } from '../common/openapi';
 import { ZodValidationPipe } from '../common/zod-validation.pipe';
 import {
   syncQuerySchema,
@@ -33,6 +34,9 @@ export class GovernmentController {
   ) {}
 
   @Get('analytics')
+  @ApiZodQuery(analyticsQuerySchema)
+  @ApiProblemResponse(403, 'Требуется роль government')
+  @ApiProblemResponse(422, 'Некорректный период или идентификатор категории')
   @ApiOperation({
     summary: 'Аналитические показатели',
     description:
@@ -63,6 +67,8 @@ export class GovernmentController {
   }
 
   @Get('sync')
+  @ApiZodQuery(syncQuerySchema)
+  @ApiProblemResponse(403, 'Требуется роль government')
   @ApiOperation({
     summary: 'Журнал загрузок',
     description:
@@ -84,6 +90,9 @@ export class GovernmentController {
   }
 
   @Post('sync/run')
+  @ApiZodBody(syncRunSchema)
+  @ApiProblemResponse(403, 'Требуется роль government')
+  @ApiProblemResponse(409, 'Источник данных отключён')
   @ApiOperation({
     summary: 'Запустить загрузку из демонстрационного источника',
     description:

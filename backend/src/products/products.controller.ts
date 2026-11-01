@@ -2,6 +2,7 @@ import { Controller, Get, Param, Query } from '@nestjs/common';
 import { ApiOperation, ApiTags } from '@nestjs/swagger';
 
 import { Public } from '../auth/jwt-auth.guard';
+import { ApiProblemResponse, ApiZodQuery } from '../common/openapi';
 import { ZodValidationPipe } from '../common/zod-validation.pipe';
 import {
   catalogQuerySchema,
@@ -23,6 +24,8 @@ export class ProductsController {
 
   @Public()
   @Get()
+  @ApiZodQuery(catalogQuerySchema)
+  @ApiProblemResponse(422, 'Некорректные параметры фильтра')
   @ApiOperation({
     summary: 'Список изделий',
     description:
@@ -38,6 +41,8 @@ export class ProductsController {
 
   @Public()
   @Get(':id')
+  @ApiProblemResponse(404, 'Изделие не найдено')
+  @ApiProblemResponse(422, 'Некорректный идентификатор')
   @ApiOperation({
     summary: 'Карточка изделия',
     description:
@@ -50,6 +55,7 @@ export class ProductsController {
 
   @Public()
   @Get(':id/analogues')
+  @ApiProblemResponse(404, 'Изделие не найдено')
   @ApiOperation({ summary: 'Аналоги изделия' })
   async analogues(
     @Param(new ZodValidationPipe(productIdSchema)) params: { id: string },
@@ -59,6 +65,8 @@ export class ProductsController {
 
   @Public()
   @Get(':id/reviews')
+  @ApiZodQuery(productReviewsQuerySchema)
+  @ApiProblemResponse(404, 'Изделие не найдено')
   @ApiOperation({
     summary: 'Опубликованные отзывы изделия',
     description:
@@ -75,6 +83,7 @@ export class ProductsController {
 
   @Public()
   @Get(':id/documents')
+  @ApiProblemResponse(404, 'Изделие не найдено')
   @ApiOperation({ summary: 'Документы изделия' })
   async documents(
     @Param(new ZodValidationPipe(productIdSchema)) params: { id: string },

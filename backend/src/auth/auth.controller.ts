@@ -4,6 +4,7 @@ import { Throttle } from '@nestjs/throttler';
 import type { FastifyReply } from 'fastify';
 
 import { Problems } from '../common/problem';
+import { ApiProblemResponse, ApiZodBody } from '../common/openapi';
 import { ZodValidationPipe } from '../common/zod-validation.pipe';
 import {
   REFRESH_COOKIE_NAME,
@@ -31,6 +32,10 @@ export class AuthController {
   @Public()
   @Post('register')
   @Throttle({ auth: { limit: 5, ttl: 60_000 } })
+  @ApiZodBody(registerSchema)
+  @ApiProblemResponse(422, 'Некорректные данные или недоступная роль')
+  @ApiProblemResponse(409, 'Адрес электронной почты уже зарегистрирован')
+  @ApiProblemResponse(429, 'Превышен лимит запросов')
   @ApiOperation({
     summary: 'Регистрация',
     description:
@@ -50,6 +55,10 @@ export class AuthController {
   @Post('login')
   @HttpCode(200)
   @Throttle({ auth: { limit: 10, ttl: 60_000 } })
+  @ApiZodBody(loginSchema)
+  @ApiProblemResponse(401, 'Неверный адрес или пароль')
+  @ApiProblemResponse(403, 'Учётная запись заблокирована')
+  @ApiProblemResponse(429, 'Превышен лимит запросов')
   @ApiOperation({ summary: 'Вход' })
   async login(
     @Body(new ZodValidationPipe(loginSchema)) input: LoginInput,
@@ -63,6 +72,7 @@ export class AuthController {
   @Public()
   @Post('refresh')
   @HttpCode(200)
+  @ApiProblemResponse(401, 'Токен недействителен или использован повторно')
   @ApiOperation({
     summary: 'Ротация refresh token',
     description:
@@ -96,6 +106,8 @@ export class AuthController {
   @Post('recovery/request')
   @HttpCode(202)
   @Throttle({ auth: { limit: 3, ttl: 60_000 } })
+  @ApiZodBody(recoveryRequestSchema)
+  @ApiProblemResponse(429, 'Превышен лимит запросов')
   @ApiOperation({
     summary: 'Запрос восстановления пароля',
     description:
@@ -112,6 +124,8 @@ export class AuthController {
   @Post('recovery/confirm')
   @HttpCode(204)
   @Throttle({ auth: { limit: 5, ttl: 60_000 } })
+  @ApiZodBody(recoveryConfirmSchema)
+  @ApiProblemResponse(400, 'Ссылка восстановления недействительна или истекла')
   @ApiOperation({ summary: 'Подтверждение нового пароля' })
   async confirmRecovery(
     @Body(new ZodValidationPipe(recoveryConfirmSchema)) input: RecoveryConfirmInput,
@@ -122,6 +136,7 @@ export class AuthController {
   }
 
   @Get('me')
+  @ApiProblemResponse(401, 'Требуется авторизация')
   @ApiOperation({
     summary: 'Текущий пользователь',
     description: 'Источник истины о сессии вместо localStorage.',

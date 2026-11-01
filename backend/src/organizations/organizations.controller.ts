@@ -4,6 +4,7 @@ import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
 import { CurrentUser } from '../auth/current-user.decorator';
 import type { AuthenticatedRequest, RequestUser } from '../auth/jwt-auth.guard';
 import { Problems } from '../common/problem';
+import { ApiProblemResponse, ApiZodQuery } from '../common/openapi';
 import { ZodValidationPipe } from '../common/zod-validation.pipe';
 import {
   notificationIdSchema,
@@ -31,6 +32,8 @@ export class OrganizationsController {
   ) {}
 
   @Get('dashboard')
+  @ApiProblemResponse(401, 'Требуется авторизация')
+  @ApiProblemResponse(403, 'Нет доступа к этой организации')
   @ApiOperation({
     summary: 'Сводка кабинета',
     description:
@@ -51,6 +54,8 @@ export class OrganizationsController {
   }
 
   @Get('notifications')
+  @ApiZodQuery(notificationsQuerySchema)
+  @ApiProblemResponse(403, 'Нет доступа к этой организации')
   @ApiOperation({
     summary: 'Уведомления сотрудника организации',
     description:

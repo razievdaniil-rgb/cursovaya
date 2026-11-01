@@ -3,6 +3,7 @@ import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
 
 import { CurrentUser } from '../auth/current-user.decorator';
 import type { RequestUser } from '../auth/jwt-auth.guard';
+import { ApiProblemResponse, ApiZodQuery } from '../common/openapi';
 import { ZodValidationPipe } from '../common/zod-validation.pipe';
 import {
   notificationIdSchema,
@@ -18,6 +19,8 @@ export class NotificationsController {
   constructor(private readonly notifications: NotificationsService) {}
 
   @Get()
+  @ApiZodQuery(notificationsQuerySchema)
+  @ApiProblemResponse(401, 'Требуется авторизация')
   @ApiOperation({
     summary: 'Мои уведомления',
     description: 'meta.unreadCount всегда считает все непрочитанные, а не только на странице.',
@@ -31,6 +34,7 @@ export class NotificationsController {
   }
 
   @Patch(':id/read')
+  @ApiProblemResponse(404, 'Уведомление не найдено')
   @ApiOperation({ summary: 'Отметить уведомление прочитанным' })
   async markRead(
     @Param(new ZodValidationPipe(notificationIdSchema)) params: { id: string },

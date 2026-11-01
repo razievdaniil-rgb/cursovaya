@@ -12,6 +12,7 @@ import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
 
 import { CurrentUser } from '../auth/current-user.decorator';
 import type { RequestUser } from '../auth/jwt-auth.guard';
+import { ApiProblemResponse, ApiZodBody } from '../common/openapi';
 import { ZodValidationPipe } from '../common/zod-validation.pipe';
 import {
   createSavedListSchema,
@@ -36,6 +37,9 @@ export class SavedListsController {
   }
 
   @Post()
+  @ApiZodBody(createSavedListSchema)
+  @ApiProblemResponse(401, 'Требуется авторизация')
+  @ApiProblemResponse(403, 'Нет доступа к указанной организации')
   @ApiOperation({ summary: 'Создать список' })
   async create(
     @Body(new ZodValidationPipe(createSavedListSchema)) input: CreateSavedListInput,
@@ -54,6 +58,8 @@ export class SavedListsController {
   }
 
   @Patch(':listId')
+  @ApiZodBody(updateSavedListSchema)
+  @ApiProblemResponse(404, 'Список не найден')
   @ApiOperation({ summary: 'Переименовать список или привязать к организации' })
   async update(
     @Param(new ZodValidationPipe(savedListIdSchema)) params: { listId: string },
@@ -74,6 +80,8 @@ export class SavedListsController {
   }
 
   @Post(':listId/products/:productId')
+  @ApiProblemResponse(404, 'Список или изделие не найдены')
+  @ApiProblemResponse(409, 'Изделие уже в списке')
   @ApiOperation({ summary: 'Добавить изделие в список' })
   async addProduct(
     @Param(new ZodValidationPipe(savedListItemParamsSchema))

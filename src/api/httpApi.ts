@@ -155,10 +155,10 @@ interface ApiProductSummary {
   shortName: string
   registrationNumber: string
   verifiedAt: string | null
-  manufacturer: { id: string; name: string; city: string | null; country: { name: string } }
-  category: { name: string }
-  riskClass: { code: string }
-  originType: { code: string }
+  manufacturer: { id: string; name: string; city: string | null; country: { name: string | null } | null }
+  category: { name: string | null } | null
+  riskClass: { code: string | null } | null
+  originType: { code: string | null } | null
   registryStatus: { code: string }
   rating: { average: number | null; reviewCount: number; organizationReviewCount: number }
   price: { min: number | null; max: number | null }
@@ -291,8 +291,10 @@ export function createHttpApi(baseUrl: string): ApiClient {
     return `${import.meta.env.BASE_URL}assets/${fileName}`
   }
 
-  function toOrigin(code: string): Product['origin'] {
-    return code === 'domestic' ? 'Россия' : 'Импорт'
+  function toOrigin(code: string | null | undefined): Product['origin'] {
+    if (code === 'domestic') return 'Россия'
+    if (code === 'imported') return 'Импорт'
+    return 'Не указано'
   }
 
   function toProduct(
@@ -303,18 +305,20 @@ export function createHttpApi(baseUrl: string): ApiClient {
       id: summary.id,
       name: summary.name,
       shortName: summary.shortName,
-      category: summary.category.name,
-      origin: toOrigin(summary.originType.code),
+      category: summary.category?.name ?? 'Без категории',
+      origin: toOrigin(summary.originType?.code),
       manufacturer: {
         id: summary.manufacturer.id,
         name: summary.manufacturer.name,
         city: summary.manufacturer.city ?? '',
-        country: summary.manufacturer.country.name,
+        country: summary.manufacturer.country?.name ?? 'Не указана',
       },
       registrationNumber: summary.registrationNumber,
       registryStatus: summary.registryStatus.code as RegistryStatus,
       verifiedAt: formatDate(summary.verifiedAt),
-      riskClass: RISK_TO_UI[summary.riskClass.code] ?? summary.riskClass.code,
+      riskClass: summary.riskClass?.code
+        ? (RISK_TO_UI[summary.riskClass.code] ?? summary.riskClass.code)
+        : 'Не указан',
       // Изделие без действующих предложений показывается с нулевой ценой —
       // интерфейс отображает её как «цена не указана».
       priceMin: summary.price.min ?? 0,
@@ -555,7 +559,7 @@ export function createHttpApi(baseUrl: string): ApiClient {
           name: product.name,
           shortName: product.shortName,
           category: '',
-          origin: 'Россия' as const,
+          origin: 'Не указано' as const,
           manufacturer: { id: '', name: product.manufacturer, city: '', country: '' },
           registrationNumber: '',
           registryStatus: product.registryStatus as RegistryStatus,

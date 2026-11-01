@@ -1,5 +1,5 @@
 export type UserRole = 'user' | 'organization' | 'government' | 'admin'
-export type RegistryStatus = 'active' | 'changed' | 'expiring' | 'expired' | 'suspended'
+export type RegistryStatus = 'active' | 'changed' | 'expiring' | 'expired' | 'suspended' | 'invalid' | 'cancelled'
 
 export interface Manufacturer {
   id: string
@@ -13,7 +13,7 @@ export interface Product {
   name: string
   shortName: string
   category: string
-  origin: 'Россия' | 'Импорт'
+  origin: 'Россия' | 'Импорт' | 'Не указано'
   manufacturer: Manufacturer
   registrationNumber: string
   registryStatus: RegistryStatus
@@ -127,7 +127,7 @@ export interface CatalogFilters {
   riskClasses: { id: string; code: string; name: string; productCount: number }[]
   registryStatuses: { id: string; code: string; name: string; productCount: number }[]
   originTypes: { id: string; code: string; name: string; productCount: number }[]
-  manufacturers: { id: string; name: string; country: string; productCount: number }[]
+  manufacturers: { id: string; name: string; country: string | null; productCount: number }[]
   price: { currency: string; min: number | null; max: number | null }
 }
 

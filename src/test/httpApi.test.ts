@@ -64,6 +64,27 @@ afterEach(() => {
 })
 
 describe('httpApi: каталог', () => {
+  it.each([
+    { category: null, riskClass: null, originType: null, country: null },
+    { category: { name: null }, riskClass: { code: null }, originType: { code: null }, country: { name: null } },
+  ])('не выдумывает происхождение для неполной записи реестра: %j', async (missing) => {
+    responder = () => ({ body: { data: [{
+      ...productSummary,
+      category: missing.category,
+      riskClass: missing.riskClass,
+      originType: missing.originType,
+      manufacturer: { ...productSummary.manufacturer, country: missing.country },
+      registryStatus: { code: 'invalid' },
+    }] } })
+
+    const [product] = await createHttpApi(API).getCatalog()
+    expect(product.origin).toBe('Не указано')
+    expect(product.manufacturer.country).toBe('Не указана')
+    expect(product.category).toBe('Без категории')
+    expect(product.riskClass).toBe('Не указан')
+    expect(product.registryStatus).toBe('invalid')
+  })
+
   it('приводит карточку API к типу Product', async () => {
     responder = () => ({ body: { data: [productSummary] } })
 

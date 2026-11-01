@@ -342,6 +342,20 @@ ER-диаграммы, таблицы с PK/FK/UNIQUE/CHECK, функциона�
 запросов в минуту. Сам лимит проверяется отдельным backend-тестом, а
 `env.schema.ts` запрещает этот флаг в production.
 
+### Проверки в CI
+
+[`.github/workflows/backend-ci.yml`](.github/workflows/backend-ci.yml) —
+три задания, все проходят на GitHub Actions (Ubuntu, Node 24,
+PostgreSQL 17 в service-контейнере):
+
+| Задание | Что делает |
+| --- | --- |
+| Миграции и seed на пустом PostgreSQL | `migrate deploy` на чистой базе, сверка `schema.prisma` с миграциями, seed, проверка объектов схемы, повторный seed |
+| Типы, линтер и тесты | typecheck, lint, 26 unit и 133 integration теста, полнота OpenAPI и его расхождение с кодом |
+| Frontend через HTTP API | поднимает базу, seed и API, собирает интерфейс с `VITE_API_URL` и прогоняет smoke-тесты |
+
+Workflow запускается на `main`, ветках `feat/**` и `fix/**` и в pull request.
+Публикация на GitHub Pages осталась отдельным workflow и только для `main`.
 ### Что не проверено
 
 - **Docker Compose не запускался.** На машине разработки Docker Desktop не

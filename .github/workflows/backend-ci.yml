@@ -235,19 +235,22 @@ jobs:
           for i in $(seq 1 40); do
             if curl -sf http://127.0.0.1:3000/api/v1/health > /dev/null; then break; fi
             if ! kill -0 "$API_PID" 2>/dev/null; then
-              echo "API упал при старте:"; cat /tmp/api.log; exit 1
+              node -e "const fs=require('fs');const [path,label]=process.argv.slice(1);let text;try{text=fs.readFileSync(path,'utf8')}catch(e){text='нет '+path}const body=text.split('\n').slice(-40).map(l=>l.replace(/%/g,'%25')).join('%0A');console.log('::error title='+label+'::'+body)" /tmp/api.log "API упал при старте"
+              exit 1
             fi
             sleep 2
           done
           if ! curl -sf http://127.0.0.1:3000/api/v1/health > /dev/null; then
-            echo "API не ответил:"; cat /tmp/api.log; kill "$API_PID"; exit 1
+            node -e "const fs=require('fs');const [path,label]=process.argv.slice(1);let text;try{text=fs.readFileSync(path,'utf8')}catch(e){text='нет '+path}const body=text.split('\n').slice(-40).map(l=>l.replace(/%/g,'%25')).join('%0A');console.log('::error title='+label+'::'+body)" /tmp/api.log "API не ответил"
+            kill "$API_PID" 2>/dev/null || true
+            exit 1
           fi
           set +e
           npx playwright test e2e/http-api.spec.ts --project=desktop
           STATUS=$?
           set -e
           kill "$API_PID" 2>/dev/null || true
-          if [ "$STATUS" -ne 0 ]; then echo "--- лог API ---"; tail -n 40 /tmp/api.log; fi
+          if [ "$STATUS" -ne 0 ]; then node -e "const fs=require('fs');const [path,label]=process.argv.slice(1);let text;try{text=fs.readFileSync(path,'utf8')}catch(e){text='нет '+path}const body=text.split('\n').slice(-40).map(l=>l.replace(/%/g,'%25')).join('%0A');console.log('::error title='+label+'::'+body)" /tmp/api.log "лог API"; fi
           exit "$STATUS"
         env:
           E2E_API_URL: http://127.0.0.1:3000/api/v1

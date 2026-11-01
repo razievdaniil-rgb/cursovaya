@@ -64,27 +64,12 @@ jobs:
 
       - uses: actions/setup-node@v4
         with:
-          node-version: 22
+          node-version: 24
           cache: npm
           cache-dependency-path: backend/package-lock.json
 
       - name: Install dependencies
-        id: install
-        run: |
-          set -o pipefail
-          node --version
-          npm --version
-          npm ci 2>&1 | tee /tmp/npm-ci.log
-
-      - name: Показать ошибку установки
-        if: failure() && steps.install.outcome == 'failure'
-        # Вывод печатается командой ::error::, потому что аннотации задания
-        # доступны через REST API, а сводка и логи шага — нет.
-        run: |
-          dump() { node -e "const fs=require('fs');const [path,label]=process.argv.slice(1);let text;try{text=fs.readFileSync(path,'utf8')}catch(e){text='не удалось прочитать '+path+': '+e.message}const body=text.split('\n').slice(-45).map(l=>l.replace(/%/g,'%25')).join('%0A');console.log('::error title='+label+'::'+body)" "$1" "$2"; }
-          dump /tmp/npm-ci.log "npm ci output"
-          LOG=$(ls -t "$HOME"/.npm/_logs/*.log 2>/dev/null | head -1)
-          if [ -n "$LOG" ]; then dump "$LOG" "npm debug log"; fi
+        run: npm ci
 
       - name: Применить миграции с нуля
         run: npm run db:migrate:deploy
@@ -141,7 +126,7 @@ jobs:
 
       - uses: actions/setup-node@v4
         with:
-          node-version: 22
+          node-version: 24
           cache: npm
           cache-dependency-path: backend/package-lock.json
 
@@ -215,7 +200,7 @@ jobs:
 
       - uses: actions/setup-node@v4
         with:
-          node-version: 22
+          node-version: 24
 
       - name: Установить зависимости backend
         working-directory: backend

@@ -210,18 +210,9 @@ jobs:
         working-directory: backend
         run: npm run db:migrate:deploy && npm run db:generate && npm run db:seed
 
-      - name: Собрать и запустить API
+      - name: Собрать API
         working-directory: backend
-        run: |
-          npm run build
-          node dist/main.js &
-          for i in $(seq 1 40); do
-            if curl -sf http://127.0.0.1:3000/api/v1/health > /dev/null; then
-              echo "API поднят"; exit 0
-            fi
-            sleep 2
-          done
-          echo "API не поднялся"; exit 1
+        run: npm run build
 
       - name: Установить зависимости frontend
         run: npm ci
@@ -235,7 +226,29 @@ jobs:
         run: npx playwright install --with-deps chrome
 
       - name: Smoke-тесты интерфейса через HTTP API
-        run: npx playwright test e2e/http-api.spec.ts --project=desktop
+        # API запускается здесь же: фоновый процесс из отдельного шага не
+        # доживает до теста, потому что между шагами выполняются установка
+        # зависимостей frontend и загрузка браузера.
+        run: |
+          node backend/dist/main.js > /tmp/api.log 2>&1 &
+          API_PID=$!
+          for i in $(seq 1 40); do
+            if curl -sf http://127.0.0.1:3000/api/v1/health > /dev/null; then break; fi
+            if ! kill -0 "$API_PID" 2>/dev/null; then
+              echo "API упал при старте:"; cat /tmp/api.log; exit 1
+            fi
+            sleep 2
+          done
+          if ! curl -sf http://127.0.0.1:3000/api/v1/health > /dev/null; then
+            echo "API не ответил:"; cat /tmp/api.log; kill "$API_PID"; exit 1
+          fi
+          set +e
+          npx playwright test e2e/http-api.spec.ts --project=desktop
+          STATUS=$?
+          set -e
+          kill "$API_PID" 2>/dev/null || true
+          if [ "$STATUS" -ne 0 ]; then echo "--- лог API ---"; tail -n 40 /tmp/api.log; fi
+          exit "$STATUS"
         env:
           E2E_API_URL: http://127.0.0.1:3000/api/v1
           E2E_SEED_PASSWORD: ci-only-password-2026

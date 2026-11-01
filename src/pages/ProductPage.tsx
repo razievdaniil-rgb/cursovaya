@@ -1,7 +1,6 @@
 import { useQuery } from '@tanstack/react-query'
 import { useNavigate, useParams } from 'react-router-dom'
-import { mockApi } from '../api/mockApi'
-import { initialReviews, products } from '../data/mockData'
+import { apiClient } from '../api/client'
 import { useAppStore } from '../store/appStore'
 import { Badge, Button, Card, EmptyState, Spinner } from '../components/ui/UI'
 import { formatPrice } from '../utils/format'
@@ -12,14 +11,17 @@ import styles from './Pages.module.css'
 export function ProductPage() {
   const { id = 'mp-12' } = useParams()
   const navigate = useNavigate()
-  const { data: product, isLoading, isError } = useQuery({ queryKey: ['product', id], queryFn: () => mockApi.getProduct(id) })
+  const { data: product, isLoading, isError } = useQuery({ queryKey: ['product', id], queryFn: () => apiClient.getProduct(id) })
+  // Отзывы и аналоги приходят из того же источника, что и карточка.
+  const { data: fetchedReviews = [] } = useQuery({ queryKey: ['product-reviews', id], queryFn: () => apiClient.getProductReviews(id) })
+  const { data: analogs = [] } = useQuery({ queryKey: ['product-analogues', id], queryFn: () => apiClient.getProductAnalogues(id) })
   const compareIds = useAppStore((s) => s.compareIds); const toggleCompare = useAppStore((s) => s.toggleCompare)
   const savedIds = useAppStore((s) => s.savedIds); const toggleSaved = useAppStore((s) => s.toggleSaved)
   const submitted = useAppStore((s) => s.submittedReviews)
   if (isLoading) return <div className={styles.page}><Spinner/></div>
   if (isError || !product) return <div className={styles.page}><EmptyState title="Изделие не найдено" text="Проверьте адрес страницы или вернитесь в каталог." action={<Button onClick={() => navigate('/catalog')}>В каталог</Button>}/></div>
-  const reviews = [...submitted, ...initialReviews].filter((review) => review.productId === product.id)
-  const analogs = products.filter((item) => item.id !== product.id).slice(0, 2)
+  // Локально отправленные отзывы показываются сразу, до модерации.
+  const reviews = [...submitted.filter((review) => review.productId === product.id), ...fetchedReviews]
   const selected = compareIds.includes(product.id); const saved = savedIds.includes(product.id)
   return <div className={styles.page}>
     <div className={styles.breadcrumbs}><button onClick={() => navigate('/catalog')}>Каталог</button><span>/</span><span>{product.category}</span><span>/</span><span>{product.name}</span></div>

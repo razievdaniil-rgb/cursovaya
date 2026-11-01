@@ -2,13 +2,13 @@ import { useQuery } from '@tanstack/react-query'
 import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { CartesianGrid, Line, LineChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts'
-import { mockApi } from '../api/mockApi'
+import { apiClient } from '../api/client'
 import { Badge, Button, Card, SelectField, Spinner } from '../components/ui/UI'
 import styles from './Pages.module.css'
 
 export function AnalyticsPage() {
   const [period, setPeriod] = useState('2020–2026'); const [category, setCategory] = useState('Все категории'); const navigate = useNavigate()
-  const { data, isLoading } = useQuery({ queryKey: ['analytics', period, category], queryFn: () => mockApi.getAnalytics(period, category) })
+  const { data, isLoading } = useQuery({ queryKey: ['analytics', period, category], queryFn: () => apiClient.getAnalytics(period, category) })
   if (isLoading || !data) return <Spinner/>
   return <div className={styles.cabinetPage}><header className={styles.analyticsTitle}><div><h1>Государственная аналитика</h1><p>Минздрав · Минпромторг</p></div><div><SelectField label="Период" value={period} onChange={(e) => setPeriod(e.target.value)}><option>2020–2026</option><option>2024–2026</option><option>2026</option></SelectField><SelectField label="Категория" value={category} onChange={(e) => setCategory(e.target.value)}><option>Все категории</option><option>Диагностика</option><option>Реанимация</option></SelectField></div></header>
     <div className={styles.cabinetStats}><Card className={styles.dashboardStat}><span>Российские изделия</span><strong>{data.domesticShare}%</strong><small>+{data.domesticDelta} п.п. за период</small></Card><Card className={styles.dashboardStat}><span>Зарегистрировано</span><strong>1 864</strong><small>+124 за квартал</small></Card><Card className={styles.dashboardStat}><span>Производители</span><strong>428</strong><small>58 регионов</small></Card><Card className={styles.dashboardStat}><span>Сигналы качества</span><strong>{data.signals}</strong><small className={styles.dangerText}>{data.criticalSignals} критических</small></Card></div>

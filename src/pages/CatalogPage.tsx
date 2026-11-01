@@ -1,7 +1,7 @@
 import { useMemo, useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { useNavigate, useSearchParams } from 'react-router-dom'
-import { mockApi } from '../api/mockApi'
+import { apiClient } from '../api/client'
 import type { CatalogQuery, RegistryStatus } from '../types'
 import { useAppStore } from '../store/appStore'
 import { ProductCard } from '../components/product/ProductCard'
@@ -16,6 +16,15 @@ const filterGroups = [
   { key: 'price', title: 'Цена', values: [['under-300','До 300 000 ₽'],['300-600','300–600 тыс.'],['over-600','Более 600 тыс.']] },
 ] as const
 
+function pluralizeProducts(count: number): string {
+  const mod100 = count % 100
+  const mod10 = count % 10
+  if (mod100 >= 11 && mod100 <= 14) return 'зарегистрированных изделий'
+  if (mod10 === 1) return 'зарегистрированное изделие'
+  if (mod10 >= 2 && mod10 <= 4) return 'зарегистрированных изделия'
+  return 'зарегистрированных изделий'
+}
+
 export function CatalogPage() {
   const [params, setParams] = useSearchParams()
   const navigate = useNavigate()
@@ -28,12 +37,16 @@ export function CatalogPage() {
   const sort = (params.get('sort') as CatalogQuery['sort']) ?? 'recommended'
   const state = (params.get('state') as CatalogQuery['state']) ?? 'default'
   const query: CatalogQuery = { search: params.get('search') ?? '', ...filters, sort, state }
-  const { data = [], isLoading, isError, refetch } = useQuery({ queryKey: ['catalog', query], queryFn: () => mockApi.getCatalog(query) })
+  const { data = [], isLoading, isError, refetch } = useQuery({ queryKey: ['catalog', query], queryFn: () => apiClient.getCatalog(query) })
+  // Общее число изделий приходит из справочника фильтров: в вёрстке его
+  // держать нельзя — оно расходится с фактическим составом каталога.
+  const { data: catalogFilters } = useQuery({ queryKey: ['catalog-filters'], queryFn: () => apiClient.getCatalogFilters() })
+  const totalProducts = catalogFilters?.totalProducts
   const setFilter = (key: string, value: string, checked: boolean) => { const next = new URLSearchParams(params); const paramKey = key === 'countries' ? 'country' : key === 'statuses' ? 'status' : key === 'risks' ? 'risk' : 'price'; if (checked) next.append(paramKey, value); else { const values = next.getAll(paramKey).filter((item) => item !== value); next.delete(paramKey); values.forEach((item) => next.append(paramKey, item)) } setParams(next) }
   const submit = (event: React.FormEvent) => { event.preventDefault(); const next = new URLSearchParams(params); if (search) next.set('search', search); else next.delete('search'); setParams(next) }
   const reset = () => { setSearch(''); setParams({}) }
   const filterPanel = <div className={styles.filterPanel}><div className={styles.filterTitle}><h2>Фильтры</h2><button onClick={() => setMobileFilters(false)} aria-label="Закрыть фильтры"><Icon name="close"/></button></div>{filterGroups.map((group) => <fieldset key={group.key}><legend>{group.title}</legend>{group.values.map(([value,label]) => { const list = filters[group.key]; return <label key={value}><input type="checkbox" checked={list.includes(value as never)} onChange={(e) => setFilter(group.key, value, e.target.checked)}/><span>{label}</span></label> })}</fieldset>)}<Button variant="secondary" onClick={reset}>Сбросить фильтры</Button></div>
-  return <div className={styles.page}><header className={styles.pageTitle}><span className={styles.eyebrow}>КАТАЛОГ</span><h1>1 864 зарегистрированных изделия</h1><p>Данные реестра и предложения поставщиков</p></header>
+  return <div className={styles.page}><header className={styles.pageTitle}><span className={styles.eyebrow}>КАТАЛОГ</span><h1>{totalProducts === undefined ? 'Каталог изделий' : `${totalProducts.toLocaleString('ru-RU')} ${pluralizeProducts(totalProducts)}`}</h1><p>Данные реестра и предложения поставщиков</p></header>
     <form className={styles.catalogSearch} onSubmit={submit}><label><span>Поиск</span><span><Icon name="search" size={19}/><input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Название или регистрационный номер"/></span></label><Button>Найти</Button><Button variant="ghost" type="button" onClick={reset}>Сбросить</Button></form>
     <div className={styles.catalogToolbar}><Button variant="secondary" icon="sliders" onClick={() => setMobileFilters(true)} className={styles.mobileFilterButton}>Фильтры · {Object.values(filters).flat().length}</Button><span>Найдено {data.length} изделий</span><SelectField label="Сортировка" value={sort} onChange={(e) => { const next = new URLSearchParams(params); next.set('sort', e.target.value); setParams(next) }}><option value="recommended">Сначала рекомендуемые</option><option value="price-asc">Сначала дешевле</option><option value="rating-desc">По рейтингу</option></SelectField></div>
     <div className={styles.chips}>{filters.countries.map((value) => <Badge tone="accent" key={value}>{value} ×</Badge>)}{filters.statuses.map((value) => <Badge tone="success" key={value}>{value === 'active' ? 'Регистрация действует' : value} ×</Badge>)}</div>

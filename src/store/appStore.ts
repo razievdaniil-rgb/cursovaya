@@ -15,6 +15,14 @@ interface AppState {
   resetDemo: () => void
 }
 
+/**
+ * Локальное состояние интерфейса.
+ *
+ * В localStorage сохраняются только UI-предпочтения: черновик сравнения,
+ * отметки «сохранено» и отправленные отзывы. Сессия в хранилище не
+ * сохраняется и токены сюда не попадают: при загрузке приложение
+ * спрашивает `/auth/me` (см. useSessionBootstrap в AppRouter).
+ */
 export const useAppStore = create<AppState>()(persist((set, get) => ({
   session: null,
   compareIds: ['mp-12', 'vismo'],
@@ -31,4 +39,12 @@ export const useAppStore = create<AppState>()(persist((set, get) => ({
   toggleSaved: (id) => set((state) => ({ savedIds: state.savedIds.includes(id) ? state.savedIds.filter((item) => item !== id) : [...state.savedIds, id] })),
   addReview: (review) => set((state) => ({ submittedReviews: [review, ...state.submittedReviews] })),
   resetDemo: () => set({ session: null, compareIds: ['mp-12', 'vismo'], savedIds: ['mp-12', 'vector-8'], submittedReviews: [] }),
-}), { name: 'medizdeliya-russia' }))
+}), {
+  name: 'medizdeliya-russia',
+  // session намеренно исключена: источник истины о входе — сервер.
+  partialize: (state) => ({
+    compareIds: state.compareIds,
+    savedIds: state.savedIds,
+    submittedReviews: state.submittedReviews,
+  }),
+}))

@@ -1,13 +1,13 @@
 import { useQuery } from '@tanstack/react-query'
 import { useSearchParams } from 'react-router-dom'
-import { mockApi } from '../api/mockApi'
+import { apiClient } from '../api/client'
 import type { SyncStatus } from '../types'
 import { Badge, Button, Card, EmptyState, Spinner } from '../components/ui/UI'
 import styles from './Pages.module.css'
 
 export function SyncPage() {
   const [params, setParams] = useSearchParams(); const state = (params.get('state') as SyncStatus['state']) || 'current'
-  const { data, isLoading, isError, refetch, isFetching } = useQuery({ queryKey: ['sync', state], queryFn: () => mockApi.getSyncStatus(state) })
+  const { data, isLoading, isError, refetch, isFetching } = useQuery({ queryKey: ['sync', state], queryFn: () => apiClient.getSyncStatus(state) })
   if (isLoading) return <Spinner label="Проверка источников данных"/>
   if (isError || !data) return <div className={styles.cabinetPage}><header className={styles.cabinetTitle}><div><h1>Синхронизация данных</h1><p>Импорт сведений из государственного реестра</p></div></header><EmptyState title="Источник данных недоступен" text="Последняя успешно загруженная версия остаётся доступной пользователям." action={<Button onClick={() => { setParams({ state: 'current' }); refetch() }}>Повторить проверку</Button>}/></div>
   return <div className={styles.cabinetPage}><header className={styles.cabinetTitle}><div><h1>Синхронизация данных</h1><p>Импорт сведений из государственного реестра</p></div></header>

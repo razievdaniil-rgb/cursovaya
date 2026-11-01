@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { NavLink, Outlet, useLocation, useNavigate } from 'react-router-dom'
 import { useAppStore } from '../../store/appStore'
-import { mockApi } from '../../api/mockApi'
+import { apiClient } from '../../api/client'
 import { Button, Badge } from '../ui/UI'
 import { Icon } from '../ui/Icon'
 import { Logo } from '../ui/Logo'
@@ -20,7 +20,7 @@ function GlobalHeader() {
   const location = useLocation()
   const roleItem = session?.role === 'organization' ? { to: '/organization', label: 'Кабинет' } : { to: '/government/analytics', label: 'Аналитика' }
   const navigation = [...publicNav, roleItem]
-  const logout = async () => { await mockApi.logout(); setSession(null); navigate('/') }
+  const logout = async () => { await apiClient.logout(); setSession(null); navigate('/') }
   return <>
     <header className={styles.header}>
       <Logo/>

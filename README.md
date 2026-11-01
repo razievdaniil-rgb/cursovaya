@@ -391,83 +391,77 @@ ER-диаграммы, таблицы с PK/FK/UNIQUE/CHECK, функциона�
 - [x] **7. `HttpApiClient` и подключение frontend** — адаптер через fetch,
       выбор реализации по переменным сборки, страницы без прямых импортов
       mock-адаптера, сессия восстанавливается через `/auth/me`.
-- [x] **8. Unit, integration и e2e тесты** — 57 unit и 171 integration на
-      backend (плюс 2 теста обращения к внешним источникам, включаемые
-      переменными окружения), 26 unit на frontend, 12 smoke-тестов
-      интерфейса против живого API и 12 e2e демо на mock-адаптере.
+- [x] **8. Unit, integration и e2e тесты** — 282 пройденных backend-теста и один пропущенный сетевой,
+      53 unit на frontend, 26 браузерных тестов через API и 12 e2e демо.
 - [x] **9. CI, README и OpenAPI** — описания запросов построены из схем Zod,
       `backend/docs/openapi.json` экспортируется командой и проверяется в CI
       на полноту и расхождение с кодом, список эндпоинтов приведён выше.
 - [x] **10. Полный прогон матрицы** — все проверки выполнены на заново
       созданной базе; результаты в таблице ниже.
 
-### Матрица проверок
+### Матрица проверок — 1 ноября 2026
 
-Прогон выполнен на отдельной базе, созданной с нуля (`CREATE DATABASE` →
-`migrate deploy` → `seed`), PostgreSQL 17.6, локаль `ru-RU`.
+Проверки выполнены на отдельных PostgreSQL 17.6: с demo seed и на чистой
+production-схеме без demo seed. Пользовательские базы не очищались.
 
-| Проверка | Команда | Результат |
-| --- | --- | --- |
-| Миграции на пустой базе | `npm run db:migrate:deploy` | 7 миграций, 53 таблицы |
-| Расхождение схемы и миграций | `prisma migrate diff --exit-code` | нет |
-| Объекты схемы и поведение CHECK | `npx tsx test/verify-schema-objects.ts` | 15 проверок |
-| Идемпотентность seed и представления | `npx tsx test/verify-seed-idempotent.ts` | 19 проверок |
-| Backend typecheck | `npm run typecheck` | без ошибок |
-| Backend lint | `npm run lint` | без замечаний |
-| Backend unit (без БД) | `npm run test:unit` | 57 тестов |
-| Backend integration | `npm run test:integration` | 171 тест, 2 пропущено |
-| OpenAPI полон и не разошёлся | `npm run openapi:export` | 42 обязательных операции, 52 всего |
-| Frontend typecheck | `npm run typecheck` | без ошибок |
-| Frontend lint | `npm run lint` | без замечаний |
-| Frontend unit | `npm run test` | 26 тестов |
-| Сборка демо (mock) | `npm run build` | успешно |
-| e2e демо на mock | `npm run test:e2e` | 12 тестов (desktop и mobile) |
-| Сборка через API | `VITE_API_URL=... npm run build` | успешно |
-| e2e интерфейса через HTTP API | `npm run test:e2e:http` | 24 теста (desktop и mobile) |
+| Проверка | Результат |
+| --- | --- |
+| Миграции на пустой БД | 9 миграций, 53 нормализованные таблицы |
+| Prisma schema против миграций | No difference detected |
+| Ограничения и derived views | 17 CHECK, 5 views, 2 materialized views; проверки seed и повторного seed пройдены |
+| Backend | typecheck, lint, build; 282 теста пройдены, 1 сетевой тест номенклатуры пропущен |
+| OpenAPI | 43 обязательные операции, 52 операции всего |
+| Frontend | typecheck, lint, 53 теста, сборка для GitHub Pages |
+| Демо без backend | 12 браузерных тестов desktop/mobile |
+| Интерфейс через HTTP | 26 браузерных тестов desktop/mobile |
+| Реальный внешний API | TLS-проверка включена; две записи Росздравнадзора загружены через API в чистую БД и доступны в каталоге |
+| Production bootstrap | создание администратора и регистрация без demo seed |
 
-Итого 290 автоматических тестов (57 + 171 backend, 26 frontend, 12 + 24
-e2e) плюс 34 проверки схемы и seed и проверка полноты OpenAPI.
+Ограниченный импорт двух записей имеет статус partial: он проверяет всю
+цепочку, но не выдаётся за полную загрузку реестра. Полный импорт запускает
+оператор. Настройка почты и восстановление worker описаны в
+[operations.md](backend/docs/operations.md).
 
-Пропущенные два integration-теста — обращения к внешним источникам
-Росздравнадзора. Они включаются переменными `REGISTRY_NETWORK_TEST=true` и
-`NOMENCLATURE_NETWORK_TEST=true`; первому нужен ещё и
-`NODE_EXTRA_CA_CERTS`. В CI они не идут: сборка не должна падать из-за
-недоступности сайта ведомства, и корня национального УЦ там нет. Оба
-проверены локально — чтение страницы реестра из сети и разбор настоящей
-выгрузки номенклатуры.
+Сетевые тесты включаются REGISTRY_NETWORK_TEST=true и
+NOMENCLATURE_NETWORK_TEST=true. Для реестра нужен NODE_EXTRA_CA_CERTS.
+CI проверяет провайдеры на fixtures, не зависит от доступности ведомства.
+Для тестов с очисткой fixtures нужна отдельная БД с безопасным именем и
+REGISTRY_TEST_DATABASE_NAME — см. operations.md.
 
-Прогон e2e через HTTP API выполняется против API с `THROTTLE_DISABLED=true`:
-наборы desktop и mobile идут параллельно и упираются в общий лимит 600
-запросов в минуту. Сам лимит проверяется отдельным backend-тестом, а
-`env.schema.ts` запрещает этот флаг в production.
+Браузерные тесты используют THROTTLE_DISABLED=true; production запрещает
+этот флаг. Настоящие ограничения частоты проверяются backend-тестами.
 
 ### Проверки в CI
 
-[`.github/workflows/backend-ci.yml`](.github/workflows/backend-ci.yml) —
-три задания, все проходят на GitHub Actions (Ubuntu, Node 24,
-PostgreSQL 17 в service-контейнере):
+[Backend CI](.github/workflows/backend-ci.yml) содержит четыре задания:
 
-| Задание | Что делает |
+| Задание | Что проверяет |
 | --- | --- |
-| Миграции и seed на пустом PostgreSQL | `migrate deploy` на чистой базе, сверка `schema.prisma` с миграциями, seed, проверка объектов схемы, повторный seed |
-| Типы, линтер и тесты | typecheck, lint, 26 unit и 133 integration теста, полнота OpenAPI и его расхождение с кодом |
-| Frontend через HTTP API | поднимает базу, seed и API, собирает интерфейс с `VITE_API_URL` и прогоняет smoke-тесты |
+| Миграции и seed | чистая БД, schema diff, ограничения, повторный seed |
+| Типы, линтер и тесты | backend, полнота и актуальность OpenAPI |
+| Frontend через HTTP API | интерфейс против настоящего API и PostgreSQL |
+| Docker Compose | сборка web/API, миграции, healthcheck, SPA и регистрация без seed |
 
-Workflow запускается на `main`, ветках `feat/**` и `fix/**` и в pull request.
-Публикация на GitHub Pages осталась отдельным workflow и только для `main`.
-### Что не проверено
+Workflow запускается на main, feat/**, fix/** и pull request.
+GitHub Pages публикуется отдельным workflow только из main, с mock API.
 
-- **Docker Compose не запускался.** На машине разработки Docker Desktop не
-  стартует: в WSL не установлено ни одного дистрибутива. Схема, seed и API
-  проверены на портативной сборке PostgreSQL 17.6
-  ([инструкция](backend/docs/local-postgres-without-docker.md)), а
-  `docker-compose.yml` и `backend/Dockerfile` написаны, но на практике не
-  поднимались. Их стоит проверить на машине с рабочим Docker до того, как
-  полагаться на команду `docker compose up`.
-- **Схемы успешных ответов в OpenAPI** отдельными моделями не объявлены;
-  форма ответа описана в общем виде в описании документа.
-- **Публичного размещения API нет**, поэтому демо на GitHub Pages продолжает
-  работать на mock-адаптере, а не через HTTP.
+### Эксплуатация
+
+Заполнить .env по .env.example, затем:
+
+```bash
+docker compose up --build -d --wait
+```
+
+Интерфейс: http://localhost:8080. Администратор создаётся отдельной
+командой; demo seed для рабочего запуска не нужен. Подробности —
+[operations.md](backend/docs/operations.md).
+
+Публичный backend не развёрнут: GitHub Pages продолжает работать как демо.
+Письма восстановления требуют настроенного почтового HTTPS API;
+реальная отправка без учётных данных оператора не проверялась.
+Схемы успешных ответов OpenAPI описаны общим контрактом, без отдельных DTO.
+Docker Desktop локально недоступен; проверка контейнеров выполняется в CI.
 
 ### Что проверено ранее по этапам
 

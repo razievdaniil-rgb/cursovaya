@@ -46,7 +46,7 @@ services:
       DATABASE_URL: postgresql://${POSTGRES_USER:-medizdeliya}:${POSTGRES_PASSWORD:-medizdeliya_local}@postgres:5432/${POSTGRES_DB:-medizdeliya}?schema=public
       JWT_ACCESS_SECRET: ${JWT_ACCESS_SECRET:?JWT_ACCESS_SECRET is required}
       JWT_REFRESH_SECRET: ${JWT_REFRESH_SECRET:?JWT_REFRESH_SECRET is required}
-      FRONTEND_ORIGINS: ${FRONTEND_ORIGINS:-http://localhost:5173}
+      FRONTEND_ORIGINS: ${FRONTEND_ORIGINS:-http://localhost:8080}
       STORAGE_DRIVER: ${STORAGE_DRIVER:-local}
       SEED_DEV_PASSWORD: ${SEED_DEV_PASSWORD:-}
       # Загрузка государственного реестра идёт по TLS с сертификатом

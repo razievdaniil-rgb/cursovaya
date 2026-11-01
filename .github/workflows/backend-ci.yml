@@ -78,20 +78,24 @@ jobs:
 
       - name: Показать ошибку установки
         if: failure() && steps.install.outcome == 'failure'
-        # Текст попадает в сводку задания, а её видно через REST API —
-        # без этого в CI остаётся только «exit code 1» без причины.
+        # Вывод печатается командой ::error::, потому что аннотации задания
+        # доступны через REST API, а сводка и логи шага — нет.
         run: |
-          echo "## npm ci не прошёл" >> "$GITHUB_STEP_SUMMARY"
-          echo '```' >> "$GITHUB_STEP_SUMMARY"
-          tail -n 60 /tmp/npm-ci.log >> "$GITHUB_STEP_SUMMARY" 2>/dev/null || echo "нет /tmp/npm-ci.log" >> "$GITHUB_STEP_SUMMARY"
-          echo '```' >> "$GITHUB_STEP_SUMMARY"
+          emit() {
+            python3 - "$1" "$2" <<'PY'
+import sys, pathlib
+label, path = sys.argv[1], sys.argv[2]
+try:
+    lines = pathlib.Path(path).read_text(errors="replace").splitlines()[-45:]
+except OSError as exc:
+    lines = [f"не удалось прочитать {path}: {exc}"]
+body = "%0A".join(line.replace("%", "%25").replace("\r", "") for line in lines)
+print(f"::error title={label}::{body}")
+PY
+          }
+          emit "npm ci output" /tmp/npm-ci.log
           LOG=$(ls -t "$HOME"/.npm/_logs/*.log 2>/dev/null | head -1)
-          if [ -n "$LOG" ]; then
-            echo "## npm debug log" >> "$GITHUB_STEP_SUMMARY"
-            echo '```' >> "$GITHUB_STEP_SUMMARY"
-            tail -n 80 "$LOG" >> "$GITHUB_STEP_SUMMARY"
-            echo '```' >> "$GITHUB_STEP_SUMMARY"
-          fi
+          if [ -n "$LOG" ]; then emit "npm debug log" "$LOG"; fi
 
       - name: Применить миграции с нуля
         run: npm run db:migrate:deploy

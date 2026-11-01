@@ -14,6 +14,12 @@ const base = {
 };
 
 describe('validateEnv', () => {
+  it('принимает пустые необязательные значения из Docker Compose', () => {
+    const env = validateEnv({ ...base, REGISTRY_SOURCE_URL: '', RECOVERY_EMAIL_API_URL: '', RECOVERY_EMAIL_API_KEY: '' });
+    expect(env.REGISTRY_SOURCE_URL).toBeUndefined();
+    expect(env.RECOVERY_EMAIL_API_URL).toBeUndefined();
+    expect(env.RECOVERY_EMAIL_API_KEY).toBeUndefined();
+  });
   it('подставляет значения по умолчанию', () => {
     const env = validateEnv({ ...base });
 

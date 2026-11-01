@@ -100,6 +100,7 @@ export class RoszdravnadzorNomenclatureProvider {
     const response = await fetch(url, {
       headers: { Accept: 'application/zip' },
       redirect: 'follow',
+      signal: AbortSignal.timeout(60_000),
     });
 
     if (!response.ok) {
@@ -109,13 +110,23 @@ export class RoszdravnadzorNomenclatureProvider {
       );
     }
 
-    const buffer = Buffer.from(await response.arrayBuffer());
-
-    if (buffer.byteLength > MAX_ARCHIVE_BYTES) {
-      throw new Error(
-        `Архив больше допустимого (${buffer.byteLength} байт): загрузка прервана`,
-      );
-    }
+    if (!response.body) throw new Error('Источник вернул пустой ответ');
+    const chunks: Buffer[] = [];
+    const reader = response.body.getReader();
+    let bytes = 0;
+    try {
+      for (;;) {
+        const chunk = await reader.read();
+        if (chunk.done) break;
+        bytes += chunk.value.byteLength;
+        if (bytes > MAX_ARCHIVE_BYTES) {
+          await reader.cancel();
+          throw new Error('Архив больше допустимого: загрузка прервана');
+        }
+        chunks.push(Buffer.from(chunk.value));
+      }
+    } finally { reader.releaseLock(); }
+    const buffer = Buffer.concat(chunks, bytes);
 
     // yauzl работает с файлом, поэтому архив кладётся во временный каталог и
     // удаляется после разбора.
@@ -139,6 +150,7 @@ export class RoszdravnadzorNomenclatureProvider {
 
     const zip = await open(archivePath, { lazyEntries: true });
 
+    try {
     const entryStream = await new Promise<Readable>((resolve, reject) => {
       let settled = false;
 
@@ -186,7 +198,6 @@ export class RoszdravnadzorNomenclatureProvider {
       zip.readEntry();
     });
 
-    try {
       return await parseNomenclatureXml(entryStream);
     } finally {
       zip.close();

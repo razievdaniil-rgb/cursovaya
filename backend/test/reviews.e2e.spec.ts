@@ -337,6 +337,19 @@ describe('GET /me/reviews', () => {
 });
 
 describe('PATCH /admin/reviews/:id/status', () => {
+  it('при двух одновременных публикациях пишет только одно событие', async () => {
+    const { token } = await newUser('moderation-race');
+    const created = await call('POST', `/products/${productIds.get('Vismo')}/reviews`, {
+      token, body: { rating: 4, title: 'Параллельная модерация', body: 'Проверка последовательности одновременных публикаций отзыва.', experience: '1_to_6_months' },
+    });
+    const id = created.body.data.id;
+    const adminToken = await loginSeed('admin@medizdeliya.local');
+    const responses = await Promise.all([1, 2].map(() => call('PATCH', `/admin/reviews/${id}/status`, {
+      token: adminToken, body: { status: 'published' },
+    })));
+    expect(responses.map((r) => r.status).sort()).toEqual([200, 409]);
+    expect(await prisma.reviewModerationEvent.count({ where: { reviewId: id } })).toBe(1);
+  });
   it('публикует отзыв, проставляет дату и пишет событие модерации', async () => {
     const { token } = await newUser('moderate');
     const created = await call('POST', `/products/${productIds.get('Vismo')}/reviews`, {

@@ -26,11 +26,13 @@ export class AnalyticsService {
           period_year: number;
           total_products: number;
           domestic_products: number;
+          unknown_origin_products: number;
           domestic_share_percent: number;
           refreshed_at: Date;
         }[]
       >`
         SELECT period_year, total_products, domestic_products,
+               unknown_origin_products,
                domestic_share_percent::float8 AS domestic_share_percent,
                refreshed_at
           FROM domestic_share_by_period_view
@@ -71,6 +73,10 @@ export class AnalyticsService {
           : 0,
       totalProducts: latest?.total_products ?? 0,
       domesticProducts: latest?.domestic_products ?? 0,
+      // Доля считается по изделиям с известным происхождением. Записи
+      // государственного реестра его не содержат (ADR 0010), поэтому их
+      // количество показывается отдельно, а не растворяется в знаменателе.
+      unknownOriginProducts: latest?.unknown_origin_products ?? 0,
       signals: Number(signals?.total ?? 0),
       criticalSignals: Number(signals?.critical ?? 0),
       importSubstitution: domesticShare
@@ -82,6 +88,7 @@ export class AnalyticsService {
           value: row.domestic_share_percent,
           totalProducts: row.total_products,
           domesticProducts: row.domestic_products,
+          unknownOriginProducts: row.unknown_origin_products,
         })),
       dependencies: importDependency,
     };
@@ -100,12 +107,14 @@ export class AnalyticsService {
         total_products: number;
         imported_products: number;
         domestic_products: number;
+        unknown_origin_products: number;
         import_share_percent: number;
         refreshed_at: Date;
       }[]
     >`
       SELECT category_id, category_name, category_slug,
              total_products, imported_products, domestic_products,
+             unknown_origin_products,
              import_share_percent::float8 AS import_share_percent,
              refreshed_at
         FROM category_import_dependency_view
@@ -121,11 +130,12 @@ export class AnalyticsService {
       totalProducts: row.total_products,
       importedProducts: row.imported_products,
       domesticProducts: row.domestic_products,
+      unknownOriginProducts: row.unknown_origin_products,
       refreshedAt: row.refreshed_at,
     }));
   }
 
-  async getProblemProducts() {
+  async getProblemProducts(query = { page: 1, limit: 20 }) {
     const rows = await this.prisma.$queryRaw<
       {
         product_id: string;
@@ -151,10 +161,13 @@ export class AnalyticsService {
                 status_blocking DESC,
                 registration_expiring DESC,
                 critical_review_count DESC,
-                name ASC
+                name ASC, product_id ASC
+       LIMIT ${query.limit} OFFSET ${(query.page - 1) * query.limit}
     `;
 
-    return rows.map((row) => ({
+    const [count] = await this.prisma.$queryRaw<{ total: bigint }[]>`SELECT count(*) AS total FROM problem_products_view`;
+    const total = Number(count?.total ?? 0);
+    return { meta: { page: query.page, limit: query.limit, total, totalPages: Math.max(1, Math.ceil(total / query.limit)) }, data: rows.map((row) => ({
       id: row.product_id,
       name: row.name,
       registrationNumber: row.registration_number,
@@ -170,7 +183,7 @@ export class AnalyticsService {
       averageRating: row.average_rating,
       criticalReviewCount: Number(row.critical_review_count),
       activeOfferCount: Number(row.active_offer_count),
-    }));
+    })) };
   }
 
   /** Принудительное обновление кэша аналитики. */

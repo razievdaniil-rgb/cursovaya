@@ -1,4 +1,5 @@
 import { Injectable, Logger } from '@nestjs/common';
+import { Problems } from '../../common/problem';
 
 import { PrismaService } from '../../prisma/prisma.service';
 import { RoszdravnadzorNomenclatureProvider } from './roszdravnadzor-nomenclature.provider';
@@ -52,8 +53,10 @@ export class NomenclatureSyncService {
         baseUrl: source.baseUrl,
         isEnabled: true,
       },
-      select: { id: true },
+      select: { id: true, isEnabled: true },
     });
+
+    if (!sourceRow.isEnabled) throw Problems.syncSourceDisabled();
 
     const running = await this.prisma.syncRunStatus.findUniqueOrThrow({
       where: { code: 'running' },

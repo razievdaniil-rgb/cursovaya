@@ -3699,7 +3699,31 @@
       "get": {
         "description": "Истекающая или приостановленная регистрация, критические отзывы, отсутствие действующих предложений. Критерии вычисляются запросом.",
         "operationId": "GovernmentController_problemProducts",
-        "parameters": [],
+        "parameters": [
+          {
+            "name": "page",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "exclusiveMinimum": true,
+              "minimum": 0,
+              "default": 1
+            }
+          },
+          {
+            "name": "limit",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "exclusiveMinimum": true,
+              "minimum": 0,
+              "maximum": 100,
+              "default": 20
+            }
+          }
+        ],
         "responses": {
           "200": {
             "description": ""
@@ -3731,6 +3755,19 @@
               "minimum": 0,
               "maximum": 100,
               "default": 20
+            }
+          },
+          {
+            "name": "source",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "mock-registry",
+                "roszdravnadzor-registry",
+                "roszdravnadzor-nomenclature"
+              ]
             }
           }
         ],
@@ -3792,6 +3829,150 @@
           }
         ],
         "summary": "Журнал загрузок",
+        "tags": [
+          "government"
+        ]
+      }
+    },
+    "/api/v1/government/sync/registry/run": {
+      "post": {
+        "description": "Настоящий источник: публичный REST API Росздравнадзора. В ответе source.isReal = true. Параметр maxPages ограничивает объём загрузки.",
+        "operationId": "GovernmentController_runRegistrySync",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "pageSize": {
+                    "type": "integer",
+                    "exclusiveMinimum": true,
+                    "minimum": 0,
+                    "maximum": 1000,
+                    "default": 500
+                  },
+                  "maxPages": {
+                    "type": "integer",
+                    "exclusiveMinimum": true,
+                    "minimum": 0,
+                    "maximum": 1000
+                  }
+                },
+                "additionalProperties": false
+              }
+            }
+          }
+        },
+        "responses": {
+          "403": {
+            "description": "Требуется роль government",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "type",
+                    "title",
+                    "status"
+                  ],
+                  "properties": {
+                    "type": {
+                      "type": "string",
+                      "format": "uri",
+                      "example": "https://medizdeliya.local/problems/validation-failed"
+                    },
+                    "title": {
+                      "type": "string",
+                      "example": "Некорректные данные запроса"
+                    },
+                    "status": {
+                      "type": "integer",
+                      "example": 403
+                    },
+                    "detail": {
+                      "type": "string"
+                    },
+                    "instance": {
+                      "type": "string"
+                    },
+                    "requestId": {
+                      "type": "string",
+                      "format": "uuid"
+                    },
+                    "errors": {
+                      "type": "object",
+                      "description": "Сообщения по полям; присутствует при 422.",
+                      "additionalProperties": {
+                        "type": "array",
+                        "items": {
+                          "type": "string"
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "502": {
+            "description": "Реестр недоступен",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "type",
+                    "title",
+                    "status"
+                  ],
+                  "properties": {
+                    "type": {
+                      "type": "string",
+                      "format": "uri",
+                      "example": "https://medizdeliya.local/problems/validation-failed"
+                    },
+                    "title": {
+                      "type": "string",
+                      "example": "Некорректные данные запроса"
+                    },
+                    "status": {
+                      "type": "integer",
+                      "example": 502
+                    },
+                    "detail": {
+                      "type": "string"
+                    },
+                    "instance": {
+                      "type": "string"
+                    },
+                    "requestId": {
+                      "type": "string",
+                      "format": "uuid"
+                    },
+                    "errors": {
+                      "type": "object",
+                      "description": "Сообщения по полям; присутствует при 422.",
+                      "additionalProperties": {
+                        "type": "array",
+                        "items": {
+                          "type": "string"
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Загрузить государственный реестр медицинских изделий",
         "tags": [
           "government"
         ]
@@ -4078,7 +4259,7 @@
   },
   "info": {
     "title": "Медицинские изделия России — API",
-    "description": "HTTP API платформы каталогизации медицинских изделий.\n\n**Формат ответов.** Успешный ответ всегда обёрнут в объект `{ \"data\": ... }`;\nсписки добавляют `meta` с полями `page`, `limit`, `total`, `totalPages`.\nОшибки возвращаются в формате RFC 9457 с типом содержимого\n`application/problem+json` и полями `type`, `title`, `status`, `detail`,\n`instance`, `requestId`; при 422 добавляется `errors` с сообщениями по полям.\n\n**Авторизация.** Access token передаётся заголовком `Authorization: Bearer`\nи живёт 15 минут. Refresh token выдаётся в HttpOnly-cookie и обновляется\nчерез `POST /auth/refresh`; повторное использование уже обменянного токена\nотзывает все сессии пользователя. Роли `government` и `admin` при\nсамостоятельной регистрации не выдаются.\n\n**Данные реестра демонстрационные.** Внешний государственный источник не\nподключён: загрузки выполняет MockRegistryProvider, и `GET /government/sync`\nвозвращает `source.isReal = false`\n(см. backend/docs/adr/0008-registry-provider.md).",
+    "description": "HTTP API платформы медицинских изделий.\n\nУспешные ответы имеют форму { data, meta? }. Каталог возвращает page, limit,\ntotal и totalPages. Ошибки — RFC 9457, application/problem+json.\n\nAccess token передаётся заголовком Authorization: Bearer и действует 15 минут.\nRefresh token хранится в HttpOnly-cookie, меняется при каждом обмене; повторное\nиспользование отзывает сессии пользователя. Роли government и admin нельзя\nполучить самостоятельной регистрацией. Восстановление пароля требует настройки\nRECOVERY_EMAIL_* и RECOVERY_RESET_URL; без доставки API возвращает 503.\n\nВнешние источники: публичный реестр Росздравнадзора и открытая номенклатурная\nклассификация. Локальный mock-registry обозначен isReal=false. Выбор источника\nжурнала: GET /government/sync?source=roszdravnadzor-registry. Запуск реестра\nвозвращает 202 после создания записи запуска; прогресс читается из журнала.\nОтсутствующие в источнике страна, категория, происхождение и класс риска\nвозвращаются пустыми: эти значения не выводятся из названий и адресов.\n\nПовторный незавершённый запуск одного источника запрещён. При аварийном\nзавершении процесса оператор сначала останавливает работника и только затем\nзакрывает зависшую запись запуска. Ограниченная maxPages загрузка — partial,\nа не подтверждение полного обхода источника.",
     "version": "1.0",
     "contact": {}
   },

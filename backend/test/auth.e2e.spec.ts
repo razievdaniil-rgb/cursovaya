@@ -16,8 +16,10 @@ import fastifyCookie from '@fastify/cookie';
 import { Test } from '@nestjs/testing';
 import { FastifyAdapter, NestFastifyApplication } from '@nestjs/platform-fastify';
 
-import { afterAll, beforeAll, describe, expect, it } from 'vitest';
+import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 
+import { RecoveryDeliveryService } from '../src/auth/recovery-delivery.service';
+import { TokensService, hashToken } from '../src/auth/tokens.service';
 import { AppModule } from '../src/app.module';
 import { ProblemDetailsFilter } from '../src/common/problem-details.filter';
 import { ResponseInterceptor } from '../src/common/response.interceptor';
@@ -30,6 +32,12 @@ const SEED_CLINIC = 'clinic@medizdeliya.local';
 let app: NestFastifyApplication;
 let prisma: PrismaService;
 const createdEmails: string[] = [];
+// Explicit test-only delivery sink; production has no silent fallback.
+const recoveryMessages = new Map<string, string>();
+const deliverySink = {
+  assertConfigured() {},
+  async send(email: string, token: string) { recoveryMessages.set(email, token); },
+};
 
 /** Адрес, уникальный для прогона: тесты не конфликтуют между собой. */
 function uniqueEmail(prefix: string): string {
@@ -92,7 +100,8 @@ async function login(email: string, password = SEED_PASSWORD): Promise<HttpResul
 beforeAll(async () => {
   process.env.THROTTLE_DISABLED = 'true';
 
-  const moduleRef = await Test.createTestingModule({ imports: [AppModule] }).compile();
+  const moduleRef = await Test.createTestingModule({ imports: [AppModule] })
+    .overrideProvider(RecoveryDeliveryService).useValue(deliverySink).compile();
 
   app = moduleRef.createNestApplication<NestFastifyApplication>(new FastifyAdapter());
   await app.register(fastifyCookie);
@@ -298,6 +307,46 @@ describe('Ротация refresh token', () => {
     expect(afterBreach.status).toBe(401);
   });
 
+  it('rolls back consumption when successor creation fails', async () => {
+    const email = uniqueEmail('refresh-rollback');
+    const session = await call('POST', '/auth/register', {
+      body: { email, password: 'VeryLongPassword1', displayName: 'Rollback' },
+    });
+    const cookie = refreshCookieFrom(session);
+    const spy = vi.spyOn(app.get(TokensService), 'issueRefreshToken')
+      .mockRejectedValueOnce(new Error('Simulated storage failure'));
+    try {
+      expect((await call('POST', '/auth/refresh', { cookie })).status).toBe(500);
+    } finally {
+      spy.mockRestore();
+    }
+    const records = await prisma.refreshToken.findMany({ where: { user: { email } } });
+    expect(records).toHaveLength(1);
+    expect(records[0]!.revokedAt).toBeNull();
+    expect((await call('POST', '/auth/refresh', { cookie })).status).toBe(200);
+  });
+
+  it('allows only one concurrent refresh and persists replay revocation', async () => {
+    const email = uniqueEmail('refresh-race');
+    const session = await call('POST', '/auth/register', {
+      body: { email, password: 'VeryLongPassword1', displayName: 'Refresh race' },
+    });
+    const cookie = refreshCookieFrom(session);
+    const results = await Promise.all(Array.from({ length: 5 }, () =>
+      call('POST', '/auth/refresh', { cookie }),
+    ));
+    expect(results.map(r => r.status).sort()).toEqual([200, 401, 401, 401, 401]);
+    const winner = results.find(r => r.status === 200)!;
+    expect((await call('GET', '/auth/me', { token: winner.body.data.accessToken })).status).toBe(401);
+    const records = await prisma.refreshToken.findMany({ where: { user: { email } } });
+    expect(records).toHaveLength(2);
+    expect(records.every(r => r.revokedAt !== null)).toBe(true);
+    expect(records.find(r => r.replacedById !== null)?.replacedById).toBe(
+      records.find(r => r.replacedById === null)?.id,
+    );
+    expect((await call('POST', '/auth/refresh', { cookie: refreshCookieFrom(winner) })).status).toBe(401);
+  });
+
   it('отклоняет запрос без cookie', async () => {
     const result = await call('POST', '/auth/refresh');
 
@@ -338,6 +387,40 @@ describe('Восстановление пароля', () => {
     expect(JSON.stringify(known.body)).not.toContain('token');
   });
 
+  it('consumes a reset token once under concurrent confirmations', async () => {
+    const email = uniqueEmail('reset-race');
+    await call('POST', '/auth/register', {
+      body: { email, password: 'VeryLongPassword1', displayName: 'Reset race' },
+    });
+    await call('POST', '/auth/recovery/request', { body: { email } });
+    const token = recoveryMessages.get(email)!;
+    const passwords = ['ConcurrentPassword1', 'ConcurrentPassword2'];
+    const results = await Promise.all(passwords.map(password =>
+      call('POST', '/auth/recovery/confirm', { body: { token, password } }),
+    ));
+    expect(results.map(r => r.status).sort()).toEqual([204, 400]);
+    const winner = results.findIndex(r => r.status === 204);
+    expect((await login(email, passwords[winner]!)).status).toBe(200);
+    expect((await login(email, passwords[1 - winner]!)).status).toBe(401);
+  });
+
+  it('rejects expired reset tokens without changing the password', async () => {
+    const email = uniqueEmail('reset-expired');
+    await call('POST', '/auth/register', {
+      body: { email, password: 'VeryLongPassword1', displayName: 'Expired reset' },
+    });
+    await call('POST', '/auth/recovery/request', { body: { email } });
+    const token = recoveryMessages.get(email)!;
+    await prisma.passwordResetToken.update({
+      where: { tokenHash: hashToken(token) },
+      data: { createdAt: new Date(Date.now() - 120_000), expiresAt: new Date(Date.now() - 60_000) },
+    });
+    expect((await call('POST', '/auth/recovery/confirm', {
+      body: { token, password: 'AnotherLongPassword2' },
+    })).status).toBe(400);
+    expect((await login(email, 'VeryLongPassword1')).status).toBe(200);
+  });
+
   it('отклоняет несуществующий токен', async () => {
     const result = await call('POST', '/auth/recovery/confirm', {
       body: { token: 'a'.repeat(43), password: 'VeryLongPassword1' },
@@ -359,24 +442,12 @@ describe('Восстановление пароля', () => {
 
     await call('POST', '/auth/recovery/request', { body: { email } });
 
-    // Токен в ответ не отдаётся, поэтому в тесте он берётся из БД — так же,
-    // как его взял бы почтовый сервис.
-    const user = await prisma.user.findUniqueOrThrow({
-      where: { email },
-      select: { id: true },
+    const plain = recoveryMessages.get(email)!;
+    expect(plain).toBeTypeOf('string');
+    const reset = await prisma.passwordResetToken.findUniqueOrThrow({
+      where: { tokenHash: hashToken(plain) },
     });
-    const reset = await prisma.passwordResetToken.findFirstOrThrow({
-      where: { userId: user.id, usedAt: null },
-      orderBy: { createdAt: 'desc' },
-    });
-
-    // Хеш в БД невосстановим, поэтому подменяем его хешем известного значения.
-    const plain = 'known-recovery-token-for-test-0000000000';
-    const { createHash } = await import('node:crypto');
-    await prisma.passwordResetToken.update({
-      where: { id: reset.id },
-      data: { tokenHash: createHash('sha256').update(plain).digest('hex') },
-    });
+    expect(reset.tokenHash).not.toBe(plain);
 
     const confirmed = await call('POST', '/auth/recovery/confirm', {
       body: { token: plain, password: newPassword },

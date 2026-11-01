@@ -1,3 +1,4 @@
+import { API_DESCRIPTION } from './openapi/description';
 import 'reflect-metadata';
 
 import fastifyCookie from '@fastify/cookie';
@@ -19,7 +20,8 @@ async function bootstrap(): Promise<void> {
   const adapter = new FastifyAdapter({
     // Request id попадает в каждую запись лога и в тело Problem Details.
     genReqId: () => randomUUID(),
-    trustProxy: true,
+    // Directly exposed API must not trust client-supplied X-Forwarded-For.
+    trustProxy: false,
     logger: false,
   });
 
@@ -53,7 +55,7 @@ async function bootstrap(): Promise<void> {
 
   const openapi = new DocumentBuilder()
     .setTitle('Медицинские изделия России — API')
-    .setDescription("HTTP API платформы каталогизации медицинских изделий.\n\n**Формат ответов.** Успешный ответ всегда обёрнут в объект `{ \"data\": ... }`;\nсписки добавляют `meta` с полями `page`, `limit`, `total`, `totalPages`.\nОшибки возвращаются в формате RFC 9457 с типом содержимого\n`application/problem+json` и полями `type`, `title`, `status`, `detail`,\n`instance`, `requestId`; при 422 добавляется `errors` с сообщениями по полям.\n\n**Авторизация.** Access token передаётся заголовком `Authorization: Bearer`\nи живёт 15 минут. Refresh token выдаётся в HttpOnly-cookie и обновляется\nчерез `POST /auth/refresh`; повторное использование уже обменянного токена\nотзывает все сессии пользователя. Роли `government` и `admin` при\nсамостоятельной регистрации не выдаются.\n\n**Данные реестра демонстрационные.** Внешний государственный источник не\nподключён: загрузки выполняет MockRegistryProvider, и `GET /government/sync`\nвозвращает `source.isReal = false`\n(см. backend/docs/adr/0008-registry-provider.md).")
+    .setDescription(API_DESCRIPTION)
     .setVersion('1.0')
     .addBearerAuth({ type: 'http', scheme: 'bearer', bearerFormat: 'JWT' })
     .build();

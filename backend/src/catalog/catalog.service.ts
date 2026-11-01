@@ -73,12 +73,15 @@ export class CatalogService {
            ORDER BY ot.code ASC
         `,
 
+        // Страна присоединяется внешним JOIN: у производителей из
+        // государственного реестра её нет (ADR 0010), а внутренний JOIN
+        // выбросил бы их из фильтра целиком.
         this.prisma.$queryRaw<
-          { id: string; name: string; country_name: string; product_count: number }[]
+          { id: string; name: string; country_name: string | null; product_count: number }[]
         >`
           SELECT m.id, m.name, c.name AS country_name, count(p.id)::int AS product_count
             FROM manufacturers m
-            JOIN countries c ON c.id = m.country_id
+            LEFT JOIN countries c ON c.id = m.country_id
             LEFT JOIN products p ON p.manufacturer_id = m.id
            GROUP BY m.id, m.name, c.name
           HAVING count(p.id) > 0

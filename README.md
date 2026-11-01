@@ -3,19 +3,32 @@
 Full-stack приложение каталогизации и мониторинга медицинских изделий:
 React-интерфейс и NestJS + PostgreSQL backend с реляционной схемой в 3НФ.
 
-> **Два источника данных с разным статусом.**
+Текущий порядок запуска и эксплуатации — [operations.md](backend/docs/operations.md).
+Полный стек включает интерфейс Nginx (`localhost:8080`), API и PostgreSQL;
+системные справочники входят в миграции, поэтому production не требует demo seed.
+Внешний реестр проверен 01.11.2026 запросом публичных записей и ограниченной
+загрузкой через API → PostgreSQL → каталог. Количество записей источника меняется.
+Токены восстановления пароля больше не выводятся в лог; для отправки письма
+оператор настраивает email API через `RECOVERY_EMAIL_*`.
+
+> **Три источника данных, и API не путает их между собой.**
 >
-> *Номенклатурная классификация медицинских изделий по видам* загружается из
-> открытых данных Росздравнадзора: 25 708 видов и 591 раздел, источник
-> помечается `isReal: true`.
+> *Государственный реестр медицинских изделий* — настоящий: публичный API
+> Росздравнадзора, 81 566 регистрационных записей, `isReal: true`. Хост
+> отдаёт сертификат национального УЦ Минцифры, поэтому процессу нужен
+> `NODE_EXTRA_CA_CERTS` (см. ниже) — проверка сертификатов при этом не
+> отключается.
 >
-> *Государственный реестр медицинских изделий* (регистрационные записи РЗН)
-> **не подключён**: этот набор открытых данных доступен только через
-> авторизацию в ЕСИА. Его по-прежнему обслуживает `MockRegistryProvider`, и
-> API честно помечает источник как `isReal: false`.
+> *Номенклатурная классификация по видам* — настоящая: открытые данные
+> Росздравнадзора, 25 708 видов и 591 раздел, `isReal: true`.
 >
-> Подробности: [ADR 0008](backend/docs/adr/0008-registry-provider.md) и
-> [ADR 0009](backend/docs/adr/0009-roszdravnadzor-open-data.md).
+> *`MockRegistryProvider`* остаётся ради frontend-only демонстрации на
+> GitHub Pages и помечен `isReal: false`. Признак берётся из описания
+> провайдера, а не из базы, поэтому подменить его записью в таблице нельзя.
+>
+> Подробности: [ADR 0008](backend/docs/adr/0008-registry-provider.md),
+> [ADR 0009](backend/docs/adr/0009-roszdravnadzor-open-data.md) и
+> [ADR 0010](backend/docs/adr/0010-real-registry-integration.md).
 
 ## Структура
 
@@ -146,10 +159,10 @@ npm run db:migrate:deploy    # применить миграции с нуля
 npm run db:seed              # идемпотентный seed
 npm run db:refresh-views     # обновить materialized views аналитики
 npm run openapi:export       # пересобрать backend/docs/openapi.json
-
+npm run db:migrate:reset     # пересоздать базу целиком
 ```
 
-Переменные источника номенклатуры (все необязательные):
+Переменные внешних источников (все необязательные):
 
 ```env
 # Каталог набора открытых данных; по умолчанию официальный адрес.
@@ -158,8 +171,37 @@ NOMENCLATURE_SOURCE_URL=https://roszdravnadzor.gov.ru/opendata/7710537160-mi_typ
 NOMENCLATURE_FILE_NAME=data-20261101-structure-20180615.zip
 # Локальный архив или XML вместо обращения к сети (используется тестами).
 NOMENCLATURE_LOCAL_FILE=
-npm run db:migrate:reset     # пересоздать базу целиком
+
+# Адрес API государственного реестра; по умолчанию официальный.
+REGISTRY_SOURCE_URL=https://elk.roszdravnadzor.gov.ru
+# Локальная страница ответа вместо обращения к сети (используется тестами).
+REGISTRY_LOCAL_FILE=
 ```
+
+### Доверие к сертификату национального УЦ
+
+`elk.roszdravnadzor.gov.ru` предъявляет сертификат, выданный национальным
+удостоверяющим центром Минцифры. В наборе доверенных корней Node его нет,
+поэтому без дополнительной настройки загрузка реестра падает — а сообщение
+об ошибке объясняет, что именно нужно сделать.
+
+Корень и промежуточный сертификат лежат в [`backend/certs/`](backend/certs/)
+вместе с описанием происхождения и отпечатков. Процессу они передаются
+переменной:
+
+```bash
+NODE_EXTRA_CA_CERTS=./certs/russian-trusted-ca.pem npm run start:dev
+```
+
+Переменная **добавляет** корень к доверенным и не отключает проверку
+сертификатов, а действует только на тот процесс, которому передана. В
+`docker-compose.yml` она уже прописана. Устанавливать корень в хранилище
+системы не нужно: это дало бы этому УЦ право подтверждать сертификаты для
+любого домена на всей машине. Отключать проверку
+(`NODE_TLS_REJECT_UNAUTHORIZED=0`) нельзя — см.
+[ADR 0010](backend/docs/adr/0010-real-registry-integration.md).
+
+Без переменной работает всё, кроме загрузки реестра.
 
 ---
 
@@ -264,6 +306,7 @@ npm run db:migrate:reset     # пересоздать базу целиком
 | GET | `/government/sync/runs/:runId/errors` | `government`, `admin` |
 | POST | `/government/sync/run` | `government`, `admin` |
 | POST | `/government/sync/nomenclature/run` | `government`, `admin` |
+| POST | `/government/sync/registry/run` | `government`, `admin` |
 
 ### Служебное
 
@@ -321,24 +364,37 @@ ER-диаграммы, таблицы с PK/FK/UNIQUE/CHECK, функциона�
 
 Этапы из `CLAUDE.md`:
 
-- [x] **1. ADR и ERD, `backend/`, Docker Compose** — 8 ADR, ER-диаграммы и
+- [x] **1. ADR и ERD, `backend/`, Docker Compose** — 10 ADR, ER-диаграммы и
       доказательство 3НФ в `backend/docs/database.md`, `docker-compose.yml`
       с healthcheck и volume, `.env.example`.
-- [x] **2. Prisma schema, SQL-ограничения, миграции и seed** — 50 таблиц,
+- [x] **2. Prisma schema, SQL-ограничения, миграции и seed** — 53 таблицы,
       17 CHECK-ограничений, 5 views, 2 materialized view, триггеры поискового
       индекса, идемпотентный seed.
 - [x] **3. Auth и RBAC** — регистрация, вход, ротация refresh token с
       обнаружением повторного использования, выход, восстановление пароля,
       `GET /auth/me`, guard-ы ролей и проверка членства в организации.
-- [ ] 4. Catalog и products.
-- [ ] 5. Reviews, saved lists, comparisons, notifications.
-- [ ] 6. Organization, analytics, mock sync.
+- [x] **4. Catalog и products** — список с фильтрами, сортировкой,
+      пагинацией и полнотекстовым поиском по названию, производителю и
+      регистрационному номеру; карточка с характеристиками в
+      `product_characteristic_values` вместо JSON, документами, ценами и
+      аналогами; `GET /catalog/filters`.
+- [x] **5. Reviews, saved lists, comparisons, notifications** — создание
+      отзыва и переходы по статусам модерации с журналом событий,
+      подтверждённый бейдж выводится из организации автора, ограничение
+      «не более трёх изделий» в сравнении держится транзакцией, списки
+      сохранённых изделий и уведомления с отметкой о прочтении.
+- [x] **6. Organization, analytics и загрузки** — кабинет медорганизации,
+      аналитика из materialized views с отметкой `refreshedAt`, проблемные
+      изделия, журнал загрузок и три источника: демонстрационный реестр,
+      настоящая номенклатура и настоящий государственный реестр
+      ([ADR 0010](backend/docs/adr/0010-real-registry-integration.md)).
 - [x] **7. `HttpApiClient` и подключение frontend** — адаптер через fetch,
       выбор реализации по переменным сборки, страницы без прямых импортов
       mock-адаптера, сессия восстанавливается через `/auth/me`.
-- [x] **8. Unit, integration и e2e тесты** — 26 unit и 133 integration на
-      backend, 26 unit на frontend, 12 smoke-тестов интерфейса против живого
-      API и 12 e2e демо на mock-адаптере.
+- [x] **8. Unit, integration и e2e тесты** — 57 unit и 171 integration на
+      backend (плюс 2 теста обращения к внешним источникам, включаемые
+      переменными окружения), 26 unit на frontend, 12 smoke-тестов
+      интерфейса против живого API и 12 e2e демо на mock-адаптере.
 - [x] **9. CI, README и OpenAPI** — описания запросов построены из схем Zod,
       `backend/docs/openapi.json` экспортируется командой и проверяется в CI
       на полноту и расхождение с кодом, список эндпоинтов приведён выше.
@@ -347,20 +403,20 @@ ER-диаграммы, таблицы с PK/FK/UNIQUE/CHECK, функциона�
 
 ### Матрица проверок
 
-Прогон выполнен на базе, созданной с нуля (`DROP DATABASE` → `CREATE` →
+Прогон выполнен на отдельной базе, созданной с нуля (`CREATE DATABASE` →
 `migrate deploy` → `seed`), PostgreSQL 17.6, локаль `ru-RU`.
 
 | Проверка | Команда | Результат |
 | --- | --- | --- |
-| Миграции на пустой базе | `npm run db:migrate:deploy` | 3 миграции, 50 таблиц |
+| Миграции на пустой базе | `npm run db:migrate:deploy` | 7 миграций, 53 таблицы |
 | Расхождение схемы и миграций | `prisma migrate diff --exit-code` | нет |
-| Объекты схемы и поведение CHECK | `npx tsx test/verify-schema-objects.ts` | 13 проверок |
+| Объекты схемы и поведение CHECK | `npx tsx test/verify-schema-objects.ts` | 15 проверок |
 | Идемпотентность seed и представления | `npx tsx test/verify-seed-idempotent.ts` | 19 проверок |
 | Backend typecheck | `npm run typecheck` | без ошибок |
 | Backend lint | `npm run lint` | без замечаний |
-| Backend unit (без БД) | `npm run test:unit` | 26 тестов |
-| Backend integration | `npm run test:integration` | 133 теста |
-| OpenAPI полон и не разошёлся | `npm run openapi:export` | 37 обязательных операций, 46 всего |
+| Backend unit (без БД) | `npm run test:unit` | 57 тестов |
+| Backend integration | `npm run test:integration` | 171 тест, 2 пропущено |
+| OpenAPI полон и не разошёлся | `npm run openapi:export` | 42 обязательных операции, 52 всего |
 | Frontend typecheck | `npm run typecheck` | без ошибок |
 | Frontend lint | `npm run lint` | без замечаний |
 | Frontend unit | `npm run test` | 26 тестов |
@@ -369,7 +425,16 @@ ER-диаграммы, таблицы с PK/FK/UNIQUE/CHECK, функциона�
 | Сборка через API | `VITE_API_URL=... npm run build` | успешно |
 | e2e интерфейса через HTTP API | `npm run test:e2e:http` | 24 теста (desktop и mobile) |
 
-Итого 221 автоматический тест плюс проверки схемы, seed и OpenAPI.
+Итого 290 автоматических тестов (57 + 171 backend, 26 frontend, 12 + 24
+e2e) плюс 34 проверки схемы и seed и проверка полноты OpenAPI.
+
+Пропущенные два integration-теста — обращения к внешним источникам
+Росздравнадзора. Они включаются переменными `REGISTRY_NETWORK_TEST=true` и
+`NOMENCLATURE_NETWORK_TEST=true`; первому нужен ещё и
+`NODE_EXTRA_CA_CERTS`. В CI они не идут: сборка не должна падать из-за
+недоступности сайта ведомства, и корня национального УЦ там нет. Оба
+проверены локально — чтение страницы реестра из сети и разбор настоящей
+выгрузки номенклатуры.
 
 Прогон e2e через HTTP API выполняется против API с `THROTTLE_DISABLED=true`:
 наборы desktop и mobile идут параллельно и упираются в общий лимит 600

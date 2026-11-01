@@ -1,0 +1,166 @@
+{
+  "content": [
+    {
+      "id": 42311,
+      "applicationId": 57029,
+      "status": {
+        "id": 3,
+        "code": "deadline_has_expired",
+        "name": "Срок действия истек"
+      },
+      "legalSystem": "RUSSIA",
+      "noRu": "ФС 012а2004/0344-04",
+      "dateRu": "2004-08-09",
+      "endDateRu": "2009-08-09",
+      "name": "Пакеты полимерные наполненные гелем охлаждающе-согревающие для терапевтического воздействия холодом или теплом \"Декор\"",
+      "producer": {
+        "name": "АОЗТ\"Декор\"",
+        "actualAddress": "Санкт-Петербург"
+      },
+      "declarant": {
+        "name": "АОЗТ\"Декор\"",
+        "actualAddress": "Санкт-Петербург"
+      },
+      "representative": {
+        "name": "АОЗТ\"Декор\"",
+        "actualAddress": "Санкт-Петербург"
+      },
+      "acceptanceCountriesIds": [],
+      "parentMedProductId": 42311,
+      "productionSites": [],
+      "dateRegistrationRu": "2004-08-09",
+      "hasChanges": false,
+      "dateStart": "2004-08-09",
+      "frnsiId": "o26332"
+    },
+    {
+      "id": 42305,
+      "applicationId": 57030,
+      "status": {
+        "id": 3,
+        "code": "deadline_has_expired",
+        "name": "Срок действия истек"
+      },
+      "legalSystem": "RUSSIA",
+      "noRu": "ФС 022а1307/0383-04",
+      "dateRu": "2004-08-04",
+      "endDateRu": "2013-08-04",
+      "name": "Аппарат лазерный полупроводниковый стоматологический терапевтический АЛСТ-01\"Оптодан\"",
+      "producer": {
+        "name": "ООО НПП \"ВЕНД\"",
+        "actualAddress": "Саратов"
+      },
+      "declarant": {
+        "name": "ООО НПП \"ВЕНД\"",
+        "actualAddress": "Саратов"
+      },
+      "representative": {
+        "name": "ООО НПП \"ВЕНД\"",
+        "actualAddress": "Саратов"
+      },
+      "acceptanceCountriesIds": [],
+      "parentMedProductId": 42305,
+      "productionSites": [],
+      "dateRegistrationRu": "2004-08-04",
+      "hasChanges": false,
+      "dateStart": "2004-08-04",
+      "frnsiId": "o26333",
+      "nomClassifierMedicalRfIds": [
+        "3306965748378768392"
+      ]
+    },
+    {
+      "id": 999001,
+      "noRu": "ФС 01012002/9999-06",
+      "name": "Изделие с аномальными датами",
+      "status": {
+        "id": 3,
+        "code": "deadline_has_expired",
+        "name": "Срок действия истек"
+      },
+      "legalSystem": "RUSSIA",
+      "dateRu": "2006-02-07",
+      "dateRegistrationRu": "2006-02-07",
+      "endDateRu": "2000-02-07",
+      "producer": {
+        "name": "ООО «Аномалия»",
+        "actualAddress": "Москва"
+      },
+      "nomClassifierMedicalRfIds": []
+    },
+    {
+      "id": 999002,
+      "noRu": "",
+      "name": "Запись без регистрационного номера",
+      "status": {
+        "id": 1,
+        "code": "active",
+        "name": "Действует"
+      },
+      "legalSystem": "RUSSIA",
+      "dateRu": "2020-01-01",
+      "producer": {
+        "name": "ООО «Без номера»",
+        "actualAddress": null
+      },
+      "nomClassifierMedicalRfIds": []
+    },
+    {
+      "id": 999003,
+      "noRu": "ФС 99999/0001-26",
+      "name": "Изделие без производителя",
+      "status": {
+        "id": 4,
+        "code": "cancelled",
+        "name": "Отменено"
+      },
+      "legalSystem": "RUSSIA",
+      "dateRu": "2021-05-05",
+      "producer": null,
+      "nomClassifierMedicalRfIds": []
+    },
+    {
+      "id": 999005,
+      "noRu": "ФС 99999/0003-26",
+      "name": "Изделие со статусом «Недействительно»",
+      "status": {
+        "id": 5,
+        "code": "invalid",
+        "name": "Недействительно"
+      },
+      "legalSystem": "RUSSIA",
+      "dateRu": "2011-03-14",
+      "dateRegistrationRu": "2011-03-14",
+      "endDateRu": "2016-03-14",
+      "producer": {
+        "name": "ООО «Недействующий»",
+        "actualAddress": "Пермь"
+      },
+      "nomClassifierMedicalRfIds": []
+    },
+    {
+      "id": 999004,
+      "noRu": "ФС 99999/0002-26",
+      "name": "Изделие с неизвестным статусом",
+      "status": {
+        "id": 9,
+        "code": "some_new_status",
+        "name": "Новый статус"
+      },
+      "legalSystem": "RUSSIA",
+      "dateRu": "2022-01-01",
+      "producer": {
+        "name": "ООО «Статус»",
+        "actualAddress": "Казань"
+      },
+      "nomClassifierMedicalRfIds": []
+    }
+  ],
+  "totalElements": 7,
+  "totalPages": 1,
+  "last": true,
+  "number": 0,
+  "size": 7,
+  "first": true,
+  "empty": false
+}

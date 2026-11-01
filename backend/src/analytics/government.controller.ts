@@ -1,4 +1,4 @@
-import { Body, Controller, Get, Param, Post, Query } from '@nestjs/common';
+import { Body, Controller, Get, HttpCode, Param, Post, Query } from '@nestjs/common';
 import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
 
 import { ROLE } from '../auth/auth.constants';
@@ -7,14 +7,18 @@ import type { RequestUser } from '../auth/jwt-auth.guard';
 import { Roles } from '../auth/roles.guard';
 import { ApiProblemResponse, ApiZodBody, ApiZodQuery } from '../common/openapi';
 import { ZodValidationPipe } from '../common/zod-validation.pipe';
+import { productReviewsQuerySchema, type ProductReviewsQueryInput } from '../products/products.schema';
 import {
+  registryRunSchema,
   syncQuerySchema,
   syncRunIdSchema,
   syncRunSchema,
   type SyncQueryInput,
+  type RegistryRunInput,
   type SyncRunInput,
 } from '../sync/sync.schema';
 import { NomenclatureSyncService } from '../sync/nomenclature/nomenclature-sync.service';
+import { RegistrySyncService } from '../sync/registry/registry-sync.service';
 import { SyncService } from '../sync/sync.service';
 import { analyticsQuerySchema, type AnalyticsQueryInput } from './analytics.schema';
 import { AnalyticsService } from './analytics.service';
@@ -33,6 +37,7 @@ export class GovernmentController {
     private readonly analytics: AnalyticsService,
     private readonly sync: SyncService,
     private readonly nomenclatureSync: NomenclatureSyncService,
+    private readonly registrySync: RegistrySyncService,
   ) {}
 
   @Get('analytics')
@@ -58,14 +63,15 @@ export class GovernmentController {
   }
 
   @Get('problem-products')
+  @ApiZodQuery(productReviewsQuerySchema)
   @ApiOperation({
     summary: 'Проблемные изделия',
     description:
       'Истекающая или приостановленная регистрация, критические отзывы, ' +
       'отсутствие действующих предложений. Критерии вычисляются запросом.',
   })
-  async problemProducts() {
-    return this.analytics.getProblemProducts();
+  async problemProducts(@Query(new ZodValidationPipe(productReviewsQuerySchema)) query: ProductReviewsQueryInput) {
+    return this.analytics.getProblemProducts(query);
   }
 
   @Get('sync')
@@ -81,6 +87,24 @@ export class GovernmentController {
     @Query(new ZodValidationPipe(syncQuerySchema)) query: SyncQueryInput,
   ) {
     return this.sync.getStatus(query);
+  }
+
+  @Post('sync/registry/run')
+  @HttpCode(202)
+  @ApiZodBody(registryRunSchema)
+  @ApiProblemResponse(403, 'Требуется роль government')
+  @ApiProblemResponse(502, 'Реестр недоступен')
+  @ApiOperation({
+    summary: 'Загрузить государственный реестр медицинских изделий',
+    description:
+      'Настоящий источник: публичный REST API Росздравнадзора. В ответе ' +
+      'source.isReal = true. Параметр maxPages ограничивает объём загрузки.',
+  })
+  async runRegistrySync(
+    @Body(new ZodValidationPipe(registryRunSchema)) input: RegistryRunInput,
+    @CurrentUser() user: RequestUser,
+  ) {
+    return this.registrySync.start(user.id, input);
   }
 
   @Post('sync/nomenclature/run')

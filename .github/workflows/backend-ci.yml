@@ -15,6 +15,8 @@ on:
       - 'package.json'
       - 'package-lock.json'
       - 'docker-compose.yml'
+      - 'Dockerfile.web'
+      - 'deploy/**'
       - '.github/workflows/backend-ci.yml'
   pull_request:
     paths:
@@ -24,6 +26,8 @@ on:
       - 'package.json'
       - 'package-lock.json'
       - 'docker-compose.yml'
+      - 'Dockerfile.web'
+      - 'deploy/**'
       - '.github/workflows/backend-ci.yml'
   workflow_dispatch:
 
@@ -272,3 +276,34 @@ jobs:
             playwright-report
             test-results
           retention-days: 7
+
+  containers:
+    name: Docker Compose на чистой базе
+    runs-on: ubuntu-latest
+    needs: [migrations, checks]
+    env:
+      JWT_ACCESS_SECRET: ci_container_access_secret_at_least_32_chars
+      JWT_REFRESH_SECRET: ci_container_refresh_secret_at_least_32_chars
+      POSTGRES_DB: medizdeliya_container
+      POSTGRES_USER: medizdeliya
+      POSTGRES_PASSWORD: ci_container_password
+      FRONTEND_ORIGINS: http://localhost:8080
+    steps:
+      - uses: actions/checkout@v4
+      - name: Проверить конфигурацию и поднять полный стек
+        run: |
+          docker compose config --quiet
+          docker compose up --build -d --wait --wait-timeout 240
+      - name: Проверить API, регистрацию без seed и SPA
+        run: |
+          curl --fail http://localhost:8080/api/v1/health
+          curl --fail http://localhost:8080/catalog > /tmp/catalog.html
+          grep -q '<!doctype html>' /tmp/catalog.html
+          curl --fail -X POST http://localhost:8080/api/v1/auth/register -H 'Content-Type: application/json' --data '{"email":"ci-container@example.test","password":"Container-Smoke-Password-2026","displayName":"Container smoke"}' > /tmp/register.json
+          node -e "const fs=require('fs'); const j=JSON.parse(fs.readFileSync('/tmp/register.json','utf8')); if(j.data.user.email!=='ci-container@example.test'||!j.data.user.roles.includes('user')) process.exit(1); console.log('Registration without seed works')"
+      - name: Логи контейнеров
+        if: failure()
+        run: docker compose logs --no-color --tail 100
+      - name: Убрать тестовые контейнеры и volume
+        if: always()
+        run: docker compose down -v

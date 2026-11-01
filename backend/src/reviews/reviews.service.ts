@@ -187,6 +187,8 @@ export class ReviewsService {
    */
   async moderate(reviewId: string, moderatorUserId: string, input: ModerateReviewInput) {
     return this.prisma.$transaction(async (tx) => {
+      // Serialize moderators so every event starts at the actual previous status.
+      await tx.$queryRaw`SELECT id FROM reviews WHERE id = ${reviewId}::uuid FOR UPDATE`;
       const review = await tx.review.findUnique({
         where: { id: reviewId },
         select: {

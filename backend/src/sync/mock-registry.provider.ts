@@ -51,6 +51,7 @@ export class MockRegistryProvider implements RegistryProvider {
     }
 
     const products = await this.prisma.product.findMany({
+      where: { externalRegistryId: null },
       orderBy: { registrationNumber: 'asc' },
       select: {
         registrationNumber: true,

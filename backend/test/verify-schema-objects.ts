@@ -65,6 +65,7 @@ const EXPECTED_SPECIAL_INDEXES = [
   'manufacturers_name_trgm_idx',
   'category_import_dependency_view_pk',
   'domestic_share_by_period_view_pk',
+  'sync_runs_one_unfinished_per_source',
 ];
 
 const EXPECTED_TABLE_COUNT = 53;
@@ -227,6 +228,20 @@ async function main(): Promise<void> {
       'CHECK диапазона оценки отзыва',
       `UPDATE reviews SET rating = 7 WHERE id = (SELECT id FROM reviews LIMIT 1)`,
     );
+
+    // Срок регистрации: правило действует для записей, которые заводим мы, и
+    // снято для загруженных из государственного реестра (ADR 0010). В реестре
+    // есть записи, где срок истекает раньше регистрации, и отвергать их
+    // значило бы терять настоящие данные.
+    await assertRejected(
+      'CHECK срока регистрации для собственной записи',
+      periodInsert(null),
+    );
+
+    await assertAccepted(
+      'CHECK пропускает аномальные даты записи реестра',
+      periodInsert(999000001),
+    );
   }
 
   if (failures.length > 0) {
@@ -240,6 +255,42 @@ async function main(): Promise<void> {
 }
 
 /** Ожидает, что запрос упадёт: иначе ограничение не работает. */
+/**
+ * Вставка изделия со сроком действия раньше даты регистрации.
+ *
+ * `externalRegistryId` отличает загруженную из реестра запись от нашей
+ * собственной: именно по этому полю CHECK решает, применять ли правило.
+ */
+function periodInsert(externalRegistryId: number | null): string {
+  return `INSERT INTO products
+     (id, manufacturer_id, current_registry_status_id, name, short_name,
+      registration_number, registration_date, registration_expires_at,
+      external_registry_id, updated_at)
+   SELECT gen_random_uuid(), m.id, s.id, 'Проверка CHECK срока', 'Проверка',
+          'CHECK-PERIOD-' || gen_random_uuid()::text,
+          DATE '2026-01-01', DATE '2020-01-01',
+          ${externalRegistryId === null ? 'NULL' : externalRegistryId}, now()
+     FROM manufacturers m, registry_statuses s LIMIT 1`;
+}
+
+/** Обратная проверка: запрос обязан пройти. Строка затем откатывается. */
+async function assertAccepted(label: string, sql: string): Promise<void> {
+  try {
+    await prisma.$transaction(async (tx) => {
+      await tx.$executeRawUnsafe(sql);
+      throw new Error('__rollback__');
+    });
+    failures.push(`${label}: транзакция не откатилась`);
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    if (message.includes('__rollback__')) {
+      console.log(`  OK  ${label}`);
+    } else {
+      failures.push(`${label}: запрос отклонён, хотя должен был пройти — ${message}`);
+    }
+  }
+}
+
 async function assertRejected(label: string, sql: string): Promise<void> {
   try {
     await prisma.$transaction(async (tx) => {

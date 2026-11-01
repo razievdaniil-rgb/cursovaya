@@ -3,6 +3,7 @@ import { Inject, Injectable, Logger } from '@nestjs/common';
 import { Problems } from '../common/problem';
 import { PrismaService } from '../prisma/prisma.service';
 import { RoszdravnadzorNomenclatureProvider } from './nomenclature/roszdravnadzor-nomenclature.provider';
+import { RoszdravnadzorRegistryProvider } from './registry/roszdravnadzor-registry.provider';
 import {
   REGISTRY_PROVIDER,
   type RegistryFetchScenario,
@@ -34,7 +35,17 @@ export class SyncService {
   // -------------------------------------------------------------------------
 
   async getStatus(query: SyncQueryInput) {
-    const source = this.provider.describe();
+    const mock = this.provider.describe();
+    const code = query.source ?? mock.code;
+    const source = code === mock.code ? mock : {
+      code,
+      name: code === RoszdravnadzorRegistryProvider.CODE
+        ? 'Государственный реестр медицинских изделий (Росздравнадзор)'
+        : 'Номенклатурная классификация медицинских изделий (Росздравнадзор)',
+      baseUrl: code === RoszdravnadzorRegistryProvider.CODE
+        ? 'https://elk.roszdravnadzor.gov.ru' : 'https://roszdravnadzor.gov.ru',
+      isReal: true,
+    };
 
     const sourceRow = await this.prisma.syncSource.findUnique({
       where: { code: source.code },
@@ -42,7 +53,7 @@ export class SyncService {
     });
 
     const runs = await this.prisma.syncRun.findMany({
-      ...(sourceRow ? { where: { syncSourceId: sourceRow.id } } : {}),
+      where: { syncSource: { code: source.code } },
       orderBy: { startedAt: 'desc' },
       take: query.limit,
       select: {
@@ -59,7 +70,12 @@ export class SyncService {
       },
     });
 
-    const lastSuccessful = runs.find((run) => run.status.code === 'success');
+    // Последняя успешная загрузка может быть за пределами текущего окна журнала.
+    const lastSuccessful = await this.prisma.syncRun.findFirst({
+      where: { syncSource: { code: source.code }, status: { code: 'success' } },
+      orderBy: { finishedAt: 'desc' },
+      select: { finishedAt: true, recordsRead: true, recordsChanged: true },
+    });
     const lastRun = runs[0];
 
     return {
@@ -68,16 +84,19 @@ export class SyncService {
         name: sourceRow?.name ?? source.name,
         baseUrl: sourceRow?.baseUrl ?? source.baseUrl,
         isEnabled: sourceRow?.isEnabled ?? false,
-        // Честное указание, что внешний реестр не подключён (ADR 0008).
+        // Признак демонстрационного источника. Настоящий реестр подключён
+        // отдельным провайдером (ADR 0010) и виден в `sources` ниже.
         isReal: source.isReal,
       },
-      state: this.deriveState(lastRun, lastSuccessful),
+      state: this.deriveState(lastRun, lastSuccessful ?? undefined),
       lastUpdatedAt: lastSuccessful?.finishedAt ?? null,
       records: lastSuccessful?.recordsRead ?? 0,
       changes: lastSuccessful?.recordsChanged ?? 0,
-      // Источников два, и у них разный статус: демонстрационный реестр и
-      // настоящая номенклатура из открытых данных (ADR 0009). Интерфейс
-      // обязан различать их, поэтому список отдаётся целиком.
+      errorCount: lastRun?.errorCount ?? 0,
+      // Источников три, и у них разный статус: демонстрационный реестр,
+      // настоящая номенклатура (ADR 0009) и настоящий государственный реестр
+      // (ADR 0010). Интерфейс обязан различать их, поэтому список отдаётся
+      // целиком.
       sources: await this.listSources(),
       runs: runs.map((run) => ({
         id: run.id,
@@ -103,7 +122,10 @@ export class SyncService {
    * его записью в таблице нельзя.
    */
   private async listSources() {
-    const real = new Set([RoszdravnadzorNomenclatureProvider.CODE]);
+    const real = new Set([
+      RoszdravnadzorNomenclatureProvider.CODE,
+      RoszdravnadzorRegistryProvider.CODE,
+    ]);
 
     const sources = await this.prisma.syncSource.findMany({
       orderBy: { code: 'asc' },

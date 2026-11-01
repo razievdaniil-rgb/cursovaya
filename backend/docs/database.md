@@ -1,7 +1,7 @@
 # База данных: модель, ERD и доказательство 3НФ
 
 Схема описана в [`prisma/schema.prisma`](../prisma/schema.prisma) и применяется
-двумя миграциями:
+последовательностью миграций:
 
 | Миграция | Содержимое |
 | --- | --- |
@@ -9,6 +9,26 @@
 | `20261031120100_constraints_and_views` | CHECK-ограничения, триггеры поискового индекса, views, materialized views, функции обновления |
 | `20261101000000_analytics_refreshed_at` | колонка `refreshed_at` в двух materialized views аналитики |
 | `20261101120000_nomenclature` | номенклатурная классификация: `nomenclature_sections`, `nomenclature_types`, `nomenclature_type_sections`, ссылка из `products` |
+| `20261101170000_real_registry` | поля записей государственного реестра в `products` и `manufacturers`; три внешних ключа `products` и `manufacturers.country_id` стали необязательными (ADR 0010) |
+| `20261101180000_registry_date_anomalies` | `products_registration_period_check` снят для записей, загруженных из реестра |
+| `20261101190000_views_tolerate_registry_gaps` | справочники в `product_catalog_view` присоединяются внешним JOIN; доли в аналитике считаются по изделиям с известным происхождением |
+| `20261101200000_registry_integrity` | один незавершённый запуск на источник (частичный UNIQUE); cancelled/invalid учитываются в проблемных изделиях |
+| `20261101210000_system_dictionaries` | 68 системных значений справочников для production без демонстрационного seed |
+
+Регистрационная запись сопоставляется по `external_registry_id`; конфликт
+уникального регистрационного номера фиксируется отдельно и не сливает разные
+изделия. Производители внешнего источника получают детерминированный UUID из
+точного имени и адреса; отсутствие производителя не объединяет все записи в
+одного выдуманного поставщика. Статус и событие истории меняются под блокировкой
+строки в одной транзакции; начальное событие означает время наблюдения, а не
+придуманную дату действия статуса в прошлом.
+
+Новые внешние атрибуты атомарны; категория, происхождение, риск и страна
+остаются внешними ключами даже когда значение неизвестно. Номенклатурные виды,
+разделы и их связь — отдельные отношения. JSON-колонок и сохраняемых рейтингов,
+счётчиков отзывов или диапазонов цен в базовых таблицах по-прежнему нет.
+Nullable FK и SQL-миграция значений справочников не меняют функциональные
+зависимости и не нарушают приведённое ниже доказательство 3НФ.
 
 Применение с нуля — одной командой:
 
@@ -191,15 +211,20 @@ erDiagram
   products {
     uuid id PK
     uuid manufacturer_id FK
-    uuid category_id FK
-    uuid risk_class_id FK
-    uuid origin_type_id FK
+    uuid category_id FK "NULL: в реестре категории нет"
+    uuid risk_class_id FK "NULL: в реестре почти не заполнен"
+    uuid origin_type_id FK "NULL: в реестре происхождения нет"
     uuid current_registry_status_id FK
+    uuid nomenclature_type_id FK "NULL"
     varchar name
     varchar short_name
     varchar registration_number UK
     date registration_date
     date registration_expires_at
+    integer external_registry_id UK "идентификатор записи реестра"
+    varchar frnsi_id
+    varchar legal_system "RUSSIA или EAEU"
+    text models_description
     timestamptz verified_at
     text description
     timestamptz created_at
@@ -232,9 +257,10 @@ erDiagram
     uuid id PK
     uuid organization_id FK
     varchar name
-    uuid country_id FK
+    uuid country_id FK "NULL: в реестре страны нет"
     uuid city_id FK
     varchar website
+    varchar actual_address "адрес строкой, как в реестре"
     timestamptz created_at
     timestamptz updated_at
   }
@@ -541,7 +567,7 @@ erDiagram
 | `comparison_items_position_range_check` | `comparison_items` | `position BETWEEN 1 AND 3` |
 | `supplier_offers_price_non_negative_check` | `supplier_offers` | `price >= 0` |
 | `supplier_offers_validity_order_check` | `supplier_offers` | `valid_until IS NULL OR valid_until > valid_from` |
-| `products_registration_period_check` | `products` | срок регистрации не раньше даты регистрации |
+| `products_registration_period_check` | `products` | срок регистрации не раньше даты регистрации — кроме записей из реестра (`external_registry_id IS NOT NULL`), где источник публикует и такие даты |
 | `product_documents_validity_order_check` | `product_documents` | `valid_until >= issued_at` |
 | `organizations_inn_format_check` | `organizations` | 10 или 12 цифр |
 | `organizations_ogrn_format_check` | `organizations` | 13 или 15 цифр |
@@ -725,6 +751,42 @@ current_registry_status_id` обновляется той же транзакц�
 номером раздела, 76 пустых названий, 52 названия, которые выглядят
 номерами. Загрузчик сохраняет такие значения как есть и пишет замечания в
 `sync_run_errors`, а не исправляет их молча.
+
+### Записи государственного реестра
+
+Загружаются из публичного API Росздравнадзора
+([ADR 0010](adr/0010-real-registry-integration.md)) в те же `products` и
+`manufacturers`, что и демонстрационные: реестр — это и есть каталог.
+
+| Колонка | Назначение |
+| --- | --- |
+| `products.external_registry_id` | идентификатор записи в реестре, UNIQUE; по нему же CHECK отличает загруженную запись от нашей |
+| `products.frnsi_id` | идентификатор во ФРНСИ, как его отдаёт источник |
+| `products.legal_system` | правовая система регистрации: `RUSSIA` или `EAEU` |
+| `products.models_description` | перечень моделей строкой; заполнен у 0–3 % записей |
+| `manufacturers.actual_address` | адрес производителя строкой — реестр не даёт ни кода страны, ни города |
+
+Почему четыре внешних ключа стали необязательными. Реестр не содержит ни
+категории, ни происхождения изделия, ни страны производителя, а класс риска
+заполнен у 0–3 % записей (проверено на 1566 записях из разных частей
+реестра). Варианта было два: выводить эти значения догадкой — из строки
+адреса, из названия — или оставить поле пустым. Выбран второй: пустое поле
+честнее правдоподобной выдумки, а приписывать государственному реестру
+сведения, которых в нём нет, недопустимо. Поэтому `products.category_id`,
+`products.risk_class_id`, `products.origin_type_id` и
+`manufacturers.country_id` допускают NULL.
+
+Это ослабление ссылочной целостности, а не нарушение 3НФ: зависимости
+`id → category_id` и прочие сохраняются, частичная функциональная
+зависимость не возникает. Карточка и фильтры обязаны работать с пустыми
+значениями.
+
+Срок регистрации. В реестре есть записи, где удостоверение истекает раньше
+даты регистрации — например, `ФС 01012002/2879-06`: регистрация 07.02.2006,
+окончание 07.02.2000; таких около трёх на тысячу. `products_registration_period_check`
+сохранён для записей, которые заводим мы, и снят для загруженных из реестра.
+Каждая аномалия попадает в `sync_run_errors` с кодом `REGISTRY_DATE_ANOMALY`,
+то есть остаётся видимой в журнале, а не исправляется молча.
 
 ### Отношения-связи
 

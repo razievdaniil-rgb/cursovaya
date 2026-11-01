@@ -1,4 +1,4 @@
-import { Injectable, Logger } from '@nestjs/common';
+import { Injectable } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
 import { randomBytes } from 'node:crypto';
 
@@ -13,6 +13,7 @@ import {
 } from './auth.constants';
 import { PasswordService } from './password.service';
 import { TokensService, hashToken } from './tokens.service';
+import { RecoveryDeliveryService } from './recovery-delivery.service';
 import type {
   LoginInput,
   RecoveryConfirmInput,
@@ -51,12 +52,11 @@ export interface AuthResult {
 
 @Injectable()
 export class AuthService {
-  private readonly logger = new Logger(AuthService.name);
-
   constructor(
     private readonly prisma: PrismaService,
     private readonly passwords: PasswordService,
     private readonly tokens: TokensService,
+    private readonly recoveryDelivery: RecoveryDeliveryService,
   ) {}
 
   // -------------------------------------------------------------------------
@@ -206,32 +206,40 @@ export class AuthService {
 
     if (!record) throw Problems.invalidRefreshToken();
 
-    if (record.revokedAt !== null) {
-      const revoked = await this.tokens.revokeAllForUser(record.userId);
-      this.logger.warn(
-        `Повторное использование refresh token пользователя ${record.userId}: ` +
-          `отозвано активных сессий — ${revoked}`,
-      );
-      throw Problems.refreshTokenReused();
-    }
-
-    if (record.expiresAt.getTime() <= Date.now()) {
-      throw Problems.invalidRefreshToken();
-    }
-
-    if (record.user.accountStatus.code === ACCOUNT_STATUS.blocked) {
-      await this.tokens.revokeAllForUser(record.userId);
-      throw Problems.accountBlocked();
-    }
-
-    const issued = await this.tokens.issueRefreshToken(record.userId, context);
-
-    // Старая запись помечается отозванной и ссылается на новую — так цепочка
-    // ротации остаётся восстановимой при разборе инцидента.
-    await this.prisma.refreshToken.update({
-      where: { id: record.id },
-      data: { revokedAt: new Date(), replacedById: issued.recordId },
+    const outcome = await this.prisma.$transaction(async (tx) => {
+      // Shared with reset, so replay revocation cannot miss an in-flight successor.
+      await tx.$queryRaw`SELECT id FROM users WHERE id = ${record.userId}::uuid FOR UPDATE`;
+      const current = await tx.refreshToken.findUniqueOrThrow({ where: { id: record.id } });
+      if (current.revokedAt !== null) {
+        await tx.refreshToken.updateMany({
+          where: { userId: record.userId, revokedAt: null }, data: { revokedAt: new Date() },
+        });
+        return { kind: 'reused' as const };
+      }
+      if (current.expiresAt.getTime() <= Date.now()) return { kind: 'invalid' as const };
+      const account = await tx.user.findUniqueOrThrow({
+        where: { id: record.userId }, select: { accountStatus: { select: { code: true } } },
+      });
+      if (account.accountStatus.code === ACCOUNT_STATUS.blocked) {
+        await tx.refreshToken.updateMany({
+          where: { userId: record.userId, revokedAt: null }, data: { revokedAt: new Date() },
+        });
+        return { kind: 'blocked' as const };
+      }
+      const claimed = await tx.refreshToken.updateMany({
+        where: { id: record.id, revokedAt: null, expiresAt: { gt: new Date() } },
+        data: { revokedAt: new Date() },
+      });
+      if (claimed.count !== 1) return { kind: 'invalid' as const };
+      const issued = await this.tokens.issueRefreshToken(record.userId, context, tx);
+      await tx.refreshToken.update({ where: { id: record.id }, data: { replacedById: issued.recordId } });
+      return { kind: 'issued' as const, issued };
     });
+    // Commit replay revocation before raising the HTTP error.
+    if (outcome.kind === 'reused') throw Problems.refreshTokenReused();
+    if (outcome.kind === 'blocked') throw Problems.accountBlocked();
+    if (outcome.kind !== 'issued') throw Problems.invalidRefreshToken();
+    const { issued } = outcome;
 
     const user = await this.loadUser(record.userId);
     const accessToken = await this.tokens.signAccessToken(
@@ -267,12 +275,12 @@ export class AuthService {
   // -------------------------------------------------------------------------
 
   /**
-   * Возвращает `{ sent: true }` всегда, независимо от того, существует ли
+   * При рабочей доставке возвращает `{ sent: true }`, независимо от того, существует ли
    * адрес, — иначе эндпоинт превращается в проверку наличия учётной записи.
-   * Токен в ответ не попадает: в dev-режиме он выводится в лог, в production
-   * его должен отправлять почтовый сервис.
+   * Токен передаётся только сервису доставки, никогда в лог.
    */
   async requestRecovery(email: string): Promise<{ sent: true }> {
+    this.recoveryDelivery.assertConfigured();
     const user = await this.prisma.user.findUnique({
       where: { email },
       select: { id: true },
@@ -282,7 +290,7 @@ export class AuthService {
 
     const token = randomBytes(32).toString('base64url');
 
-    await this.prisma.passwordResetToken.create({
+    const reset = await this.prisma.passwordResetToken.create({
       data: {
         userId: user.id,
         tokenHash: hashToken(token),
@@ -290,8 +298,11 @@ export class AuthService {
       },
     });
 
-    if (process.env.NODE_ENV !== 'production') {
-      this.logger.debug(`Токен восстановления для ${email}: ${token}`);
+    try {
+      await this.recoveryDelivery.send(email, token);
+    } catch {
+      await this.prisma.passwordResetToken.delete({ where: { id: reset.id } });
+      throw this.recoveryDelivery.unavailable();
     }
 
     return { sent: true };
@@ -309,21 +320,21 @@ export class AuthService {
 
     const passwordHash = await this.passwords.hash(input.password);
 
-    await this.prisma.$transaction([
-      this.prisma.user.update({
-        where: { id: record.userId },
-        data: { passwordHash },
-      }),
-      this.prisma.passwordResetToken.update({
-        where: { id: record.id },
-        data: { usedAt: new Date() },
-      }),
-      // Смена пароля завершает все существующие сессии.
-      this.prisma.refreshToken.updateMany({
-        where: { userId: record.userId, revokedAt: null },
-        data: { revokedAt: new Date() },
-      }),
-    ]);
+    await this.prisma.$transaction(async (tx) => {
+      await tx.$queryRaw`SELECT id FROM users WHERE id = ${record.userId}::uuid FOR UPDATE`;
+      const now = new Date();
+      const consumed = await tx.passwordResetToken.updateMany({
+        where: { id: record.id, usedAt: null, expiresAt: { gt: now } }, data: { usedAt: now },
+      });
+      if (consumed.count !== 1) throw Problems.invalidResetToken();
+      await tx.user.update({ where: { id: record.userId }, data: { passwordHash } });
+      await tx.passwordResetToken.updateMany({
+        where: { userId: record.userId, usedAt: null }, data: { usedAt: now },
+      });
+      await tx.refreshToken.updateMany({
+        where: { userId: record.userId, revokedAt: null }, data: { revokedAt: now },
+      });
+    });
   }
 
   // -------------------------------------------------------------------------

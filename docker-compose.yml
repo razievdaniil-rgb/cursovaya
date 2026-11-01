@@ -49,19 +49,40 @@ services:
       FRONTEND_ORIGINS: ${FRONTEND_ORIGINS:-http://localhost:5173}
       STORAGE_DRIVER: ${STORAGE_DRIVER:-local}
       SEED_DEV_PASSWORD: ${SEED_DEV_PASSWORD:-}
+      # Загрузка государственного реестра идёт по TLS с сертификатом
+      # национального УЦ Минцифры (ADR 0010). Переменная добавляет его корень
+      # к доверенным только для этого процесса и не отключает проверку.
+      NODE_EXTRA_CA_CERTS: /app/certs/russian-trusted-ca.pem
+      REGISTRY_SOURCE_URL: ${REGISTRY_SOURCE_URL:-}
+      ANALYTICS_REFRESH_INTERVAL_MINUTES: ${ANALYTICS_REFRESH_INTERVAL_MINUTES:-15}
+      RECOVERY_EMAIL_API_URL: ${RECOVERY_EMAIL_API_URL:-}
+      RECOVERY_EMAIL_API_KEY: ${RECOVERY_EMAIL_API_KEY:-}
+      RECOVERY_EMAIL_FROM: ${RECOVERY_EMAIL_FROM:-}
+      RECOVERY_RESET_URL: ${RECOVERY_RESET_URL:-}
     ports:
       - "${API_PORT:-3000}:3000"
     volumes:
       - api-storage:/app/storage
     # Миграции применяются перед стартом приложения, поэтому контейнер
     # поднимается на уже готовой схеме.
-    command: sh -c "npx prisma migrate deploy && node dist/main.js"
+    command: sh -c "./node_modules/.bin/prisma migrate deploy && node dist/main.js"
     healthcheck:
       test: ["CMD-SHELL", "node -e \"fetch('http://127.0.0.1:3000/api/v1/health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))\""]
       interval: 10s
       timeout: 5s
       retries: 12
       start_period: 20s
+
+  web:
+    build:
+      context: .
+      dockerfile: Dockerfile.web
+    depends_on:
+      api:
+        condition: service_healthy
+    ports:
+      - "${WEB_PORT:-8080}:8080"
+    restart: unless-stopped
 
 volumes:
   postgres-data:

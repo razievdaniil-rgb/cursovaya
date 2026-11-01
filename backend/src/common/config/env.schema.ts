@@ -1,5 +1,9 @@
 import { z } from 'zod';
 
+// Compose substitutes unset optional variables with empty strings.
+const optionalString = (schema: z.ZodString) =>
+  z.preprocess((value) => value === '' ? undefined : value, schema.optional());
+
 /**
  * Валидация окружения при старте. Приложение не поднимается с пустыми или
  * слишком короткими секретами — иначе JWT можно подобрать.
@@ -64,9 +68,25 @@ export const envSchema = z.object({
    * набора (ADR 0009). NOMENCLATURE_LOCAL_FILE позволяет загрузить ранее
    * скачанный архив или XML, не обращаясь к сети, — так работают тесты.
    */
-  NOMENCLATURE_SOURCE_URL: z.string().url().optional(),
-  NOMENCLATURE_FILE_NAME: z.string().min(1).optional(),
-  NOMENCLATURE_LOCAL_FILE: z.string().min(1).optional(),
+  NOMENCLATURE_SOURCE_URL: optionalString(z.string().url()),
+  NOMENCLATURE_FILE_NAME: optionalString(z.string().min(1)),
+  NOMENCLATURE_LOCAL_FILE: optionalString(z.string().min(1)),
+
+  /**
+   * Государственный реестр медицинских изделий.
+   *
+   * Хост отдаёт сертификат национального УЦ Минцифры, поэтому процессу нужен
+   * NODE_EXTRA_CA_CERTS=certs/russian-trusted-ca.pem (ADR 0010).
+   */
+  REGISTRY_SOURCE_URL: optionalString(z.string().url()),
+  REGISTRY_LOCAL_FILE: optionalString(z.string().min(1)),
+
+  /** 0 disables periodic refresh; test processes never start background timers. */
+  ANALYTICS_REFRESH_INTERVAL_MINUTES: z.coerce.number().int().min(0).max(1440).default(15),
+  RECOVERY_EMAIL_API_URL: optionalString(z.string().url()),
+  RECOVERY_EMAIL_API_KEY: optionalString(z.string().min(1)),
+  RECOVERY_EMAIL_FROM: optionalString(z.string().min(1)),
+  RECOVERY_RESET_URL: optionalString(z.string().url()),
 
   /** Только для локального seed, в рантайме не используется. */
   SEED_DEV_PASSWORD: z.string().optional(),

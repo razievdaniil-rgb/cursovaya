@@ -10,6 +10,7 @@
  */
 
 import fastifyCookie from '@fastify/cookie';
+import { ConfigService } from '@nestjs/config';
 import { FastifyAdapter, NestFastifyApplication } from '@nestjs/platform-fastify';
 import { Test } from '@nestjs/testing';
 import { resolve } from 'node:path';
@@ -315,17 +316,20 @@ describe('Загрузка из сети', () => {
   it.skipIf(!enabled)(
     'скачивает и разбирает настоящую выгрузку Росздравнадзора',
     async () => {
-      delete process.env.NOMENCLATURE_LOCAL_FILE;
-      try {
-        const result = await provider.fetchNomenclature();
+      // Провайдер приложения настроен на фикстуру, и убрать её через
+      // process.env нельзя: ConfigModule поднят с cache: true и отдаёт
+      // значения, провалидированные при старте. Поэтому для сети берётся
+      // отдельный экземпляр с пустыми настройками.
+      const network = new RoszdravnadzorNomenclatureProvider({
+        get: () => undefined,
+      } as unknown as ConfigService);
 
-        // В выгрузке десятки тысяч видов; точные числа меняются каждый месяц.
-        expect(result.recordsRead).toBeGreaterThan(20000);
-        expect(result.types.length).toBeGreaterThan(20000);
-        expect(result.sections.length).toBeGreaterThan(100);
-      } finally {
-        process.env.NOMENCLATURE_LOCAL_FILE = FIXTURE;
-      }
+      const result = await network.fetchNomenclature();
+
+      // В выгрузке десятки тысяч видов; точные числа меняются каждый месяц.
+      expect(result.recordsRead).toBeGreaterThan(20000);
+      expect(result.types.length).toBeGreaterThan(20000);
+      expect(result.sections.length).toBeGreaterThan(100);
     },
     120_000,
   );

@@ -2,6 +2,7 @@ import { Module } from '@nestjs/common';
 import { JwtModule } from '@nestjs/jwt';
 
 import { AuthController } from './auth.controller';
+import { RecoveryDeliveryService } from './recovery-delivery.service';
 import { AuthService } from './auth.service';
 import { JwtAuthGuard } from './jwt-auth.guard';
 import { PasswordService } from './password.service';
@@ -13,7 +14,7 @@ import { TokensService } from './tokens.service';
   // поэтому глобальная регистрация секрета здесь не нужна.
   imports: [JwtModule.register({})],
   controllers: [AuthController],
-  providers: [AuthService, PasswordService, TokensService, JwtAuthGuard, RolesGuard],
+  providers: [RecoveryDeliveryService, AuthService, PasswordService, TokensService, JwtAuthGuard, RolesGuard],
   exports: [AuthService, TokensService, PasswordService, JwtAuthGuard, RolesGuard],
 })
 export class AuthModule {}

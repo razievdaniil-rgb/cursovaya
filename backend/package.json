@@ -22,7 +22,9 @@
     "db:refresh-views": "tsx prisma/refresh-views.ts",
     "test:unit": "vitest run --config vitest.unit.config.ts",
     "test:integration": "vitest run --config vitest.integration.config.ts",
-    "openapi:export": "nest build && node dist/openapi/export-openapi.js"
+    "openapi:export": "nest build && node dist/openapi/export-openapi.js",
+    "admin:create": "node dist/admin/create-admin.js",
+    "registry:sync": "node dist/sync/registry/sync-registry.cli.js"
   },
   "prisma": {
     "seed": "tsx prisma/seed.ts"
@@ -40,6 +42,7 @@
     "@nestjs/throttler": "^6.4.0",
     "@node-rs/argon2": "^2.0.2",
     "@prisma/client": "^6.17.0",
+    "prisma": "^6.19.3",
     "reflect-metadata": "^0.2.2",
     "rxjs": "^7.8.2",
     "saxes": "^6.0.0",
@@ -58,7 +61,6 @@
     "@typescript-eslint/eslint-plugin": "^8.46.0",
     "@typescript-eslint/parser": "^8.46.0",
     "eslint": "^9.38.0",
-    "prisma": "^6.17.0",
     "supertest": "^7.1.4",
     "tsx": "^4.20.6",
     "typescript": "~5.9.3",

@@ -37,7 +37,6 @@ import { PrismaModule } from './prisma/prisma.module';
             limit: config.getOrThrow<number>('THROTTLE_DEFAULT_LIMIT'),
             ttl: 60_000,
           },
-          { name: 'auth', limit: 10, ttl: 60_000 },
         ],
       }),
     }),

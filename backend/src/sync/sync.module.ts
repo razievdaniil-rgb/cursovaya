@@ -5,17 +5,21 @@ import { NomenclatureController } from './nomenclature/nomenclature.controller';
 import { NomenclatureService } from './nomenclature/nomenclature.service';
 import { NomenclatureSyncService } from './nomenclature/nomenclature-sync.service';
 import { RoszdravnadzorNomenclatureProvider } from './nomenclature/roszdravnadzor-nomenclature.provider';
+import { RegistrySyncService } from './registry/registry-sync.service';
+import { RoszdravnadzorRegistryProvider } from './registry/roszdravnadzor-registry.provider';
 import { REGISTRY_PROVIDER } from './registry-provider';
 import { SyncService } from './sync.service';
 
 /**
- * Два источника с разным статусом (ADR 0009):
+ * Три источника с разным статусом:
  *
- *  * `MockRegistryProvider` — демонстрационный реестр изделий. Реальный набор
- *    «Государственный реестр медицинских изделий» доступен только через
- *    авторизацию в ЕСИА, поэтому подменить провайдер пока нечем.
+ *  * `MockRegistryProvider` — демонстрационный реестр. Остаётся ради
+ *    frontend-only демонстрации на GitHub Pages (ADR 0007) и помечен
+ *    `isReal: false`, чтобы его нельзя было принять за настоящий.
  *  * `RoszdravnadzorNomenclatureProvider` — настоящий источник: публичный
- *    набор открытых данных с номенклатурной классификацией видов.
+ *    набор открытых данных с номенклатурной классификацией видов (ADR 0009).
+ *  * `RoszdravnadzorRegistryProvider` — настоящий государственный реестр
+ *    медицинских изделий через публичный API виджета (ADR 0010).
  */
 @Module({
   controllers: [NomenclatureController],
@@ -26,6 +30,8 @@ import { SyncService } from './sync.service';
     RoszdravnadzorNomenclatureProvider,
     NomenclatureSyncService,
     NomenclatureService,
+    RoszdravnadzorRegistryProvider,
+    RegistrySyncService,
   ],
   exports: [
     SyncService,
@@ -33,6 +39,8 @@ import { SyncService } from './sync.service';
     NomenclatureSyncService,
     NomenclatureService,
     RoszdravnadzorNomenclatureProvider,
+    RoszdravnadzorRegistryProvider,
+    RegistrySyncService,
   ],
 })
 export class SyncModule {}

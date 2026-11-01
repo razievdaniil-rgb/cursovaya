@@ -55,16 +55,16 @@ model User {
 
   accountStatus AccountStatus @relation(fields: [accountStatusId], references: [id], onDelete: Restrict, onUpdate: Cascade)
 
-  roles                UserRole[]
-  refreshTokens        RefreshToken[]
-  passwordResetTokens  PasswordResetToken[]
-  organizationMembers  OrganizationMember[]
-  reviews              Review[]
-  moderationEvents     ReviewModerationEvent[]
-  savedLists           SavedList[]
-  comparisons          Comparison[]
-  notifications        NotificationRecipient[]
-  initiatedSyncRuns    SyncRun[]
+  roles               UserRole[]
+  refreshTokens       RefreshToken[]
+  passwordResetTokens PasswordResetToken[]
+  organizationMembers OrganizationMember[]
+  reviews             Review[]
+  moderationEvents    ReviewModerationEvent[]
+  savedLists          SavedList[]
+  comparisons         Comparison[]
+  notifications       NotificationRecipient[]
+  initiatedSyncRuns   SyncRun[]
 
   @@index([accountStatusId])
   @@map("users")
@@ -254,14 +254,17 @@ model Manufacturer {
   id             String   @id @default(uuid()) @db.Uuid
   organizationId String?  @map("organization_id") @db.Uuid
   name           String   @db.VarChar(512)
-  countryId      String   @map("country_id") @db.Uuid
+  /// Реестр не публикует страну производителя, только адрес строкой.
+  countryId      String?  @map("country_id") @db.Uuid
+  /// Адрес производителя в том виде, в каком его публикует реестр.
+  actualAddress  String?  @map("actual_address") @db.VarChar(1024)
   cityId         String?  @map("city_id") @db.Uuid
   website        String?  @db.VarChar(512)
   createdAt      DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
   updatedAt      DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
 
   organization Organization? @relation(fields: [organizationId], references: [id], onDelete: SetNull, onUpdate: Cascade)
-  country      Country       @relation(fields: [countryId], references: [id], onDelete: Restrict, onUpdate: Cascade)
+  country      Country?      @relation(fields: [countryId], references: [id], onDelete: Restrict, onUpdate: Cascade)
   city         City?         @relation(fields: [cityId], references: [id], onDelete: SetNull, onUpdate: Cascade)
 
   products Product[]
@@ -274,11 +277,11 @@ model Manufacturer {
 }
 
 model ProductCategory {
-  id        String @id @default(uuid()) @db.Uuid
+  id        String  @id @default(uuid()) @db.Uuid
   parentId  String? @map("parent_id") @db.Uuid
-  name      String @db.VarChar(255)
-  slug      String @unique @db.VarChar(255)
-  sortOrder Int    @default(0) @map("sort_order") @db.SmallInt
+  name      String  @db.VarChar(255)
+  slug      String  @unique @db.VarChar(255)
+  sortOrder Int     @default(0) @map("sort_order") @db.SmallInt
 
   parent   ProductCategory?  @relation("CategoryTree", fields: [parentId], references: [id], onDelete: Restrict, onUpdate: Cascade)
   children ProductCategory[] @relation("CategoryTree")
@@ -325,11 +328,22 @@ model RegistryStatus {
 model Product {
   id                      String    @id @default(uuid()) @db.Uuid
   manufacturerId          String    @map("manufacturer_id") @db.Uuid
-  categoryId              String    @map("category_id") @db.Uuid
-  riskClassId             String    @map("risk_class_id") @db.Uuid
-  originTypeId            String    @map("origin_type_id") @db.Uuid
+  /// Реестр не содержит категории: она есть только у демонстрационных данных.
+  categoryId              String?   @map("category_id") @db.Uuid
+  /// В реестре класс риска заполнен у 0–3 % записей (проверено на 1566).
+  riskClassId             String?   @map("risk_class_id") @db.Uuid
+  /// Происхождение в реестре не публикуется.
+  originTypeId            String?   @map("origin_type_id") @db.Uuid
   currentRegistryStatusId String    @map("current_registry_status_id") @db.Uuid
   nomenclatureTypeId      String?   @map("nomenclature_type_id") @db.Uuid
+  /// Идентификатор записи в государственном реестре; ключ для повторной загрузки.
+  externalRegistryId      Int?      @unique @map("external_registry_id")
+  /// Правовая система регистрации: RUSSIA или EAEU.
+  legalSystem             String?   @map("legal_system") @db.VarChar(16)
+  /// Перечень моделей и принадлежностей из реестра.
+  modelsDescription       String?   @map("models_description")
+  /// Идентификатор записи во ФРНСИ.
+  frnsiId                 String?   @map("frnsi_id") @db.VarChar(64)
   name                    String    @db.VarChar(512)
   shortName               String    @map("short_name") @db.VarChar(255)
   registrationNumber      String    @unique @map("registration_number") @db.VarChar(64)
@@ -340,12 +354,12 @@ model Product {
   createdAt               DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
   updatedAt               DateTime  @updatedAt @map("updated_at") @db.Timestamptz(6)
 
-  manufacturer          Manufacturer      @relation(fields: [manufacturerId], references: [id], onDelete: Restrict, onUpdate: Cascade)
-  category              ProductCategory   @relation(fields: [categoryId], references: [id], onDelete: Restrict, onUpdate: Cascade)
-  riskClass             RiskClass         @relation(fields: [riskClassId], references: [id], onDelete: Restrict, onUpdate: Cascade)
-  originType            ProductOriginType @relation(fields: [originTypeId], references: [id], onDelete: Restrict, onUpdate: Cascade)
-  currentRegistryStatus RegistryStatus    @relation(fields: [currentRegistryStatusId], references: [id], onDelete: Restrict, onUpdate: Cascade)
-  nomenclatureType      NomenclatureType? @relation(fields: [nomenclatureTypeId], references: [id], onDelete: SetNull, onUpdate: Cascade)
+  manufacturer          Manufacturer       @relation(fields: [manufacturerId], references: [id], onDelete: Restrict, onUpdate: Cascade)
+  category              ProductCategory?   @relation(fields: [categoryId], references: [id], onDelete: Restrict, onUpdate: Cascade)
+  riskClass             RiskClass?         @relation(fields: [riskClassId], references: [id], onDelete: Restrict, onUpdate: Cascade)
+  originType            ProductOriginType? @relation(fields: [originTypeId], references: [id], onDelete: Restrict, onUpdate: Cascade)
+  currentRegistryStatus RegistryStatus     @relation(fields: [currentRegistryStatusId], references: [id], onDelete: Restrict, onUpdate: Cascade)
+  nomenclatureType      NomenclatureType?  @relation(fields: [nomenclatureTypeId], references: [id], onDelete: SetNull, onUpdate: Cascade)
 
   images               ProductImage[]
   documents            ProductDocument[]
@@ -375,9 +389,9 @@ model Product {
 /// Производный поисковый индекс. Не источник истины: таблица целиком
 /// пересобирается триггерами из products и manufacturers (миграция 0002).
 model ProductSearchDocument {
-  productId    String                 @id @map("product_id") @db.Uuid
+  productId    String                   @id @map("product_id") @db.Uuid
   searchVector Unsupported("tsvector")? @map("search_vector")
-  updatedAt    DateTime               @default(now()) @map("updated_at") @db.Timestamptz(6)
+  updatedAt    DateTime                 @default(now()) @map("updated_at") @db.Timestamptz(6)
 
   product Product @relation(fields: [productId], references: [id], onDelete: Cascade, onUpdate: Cascade)
 
@@ -388,12 +402,12 @@ model ProductSearchDocument {
 }
 
 model ProductImage {
-  id        String   @id @default(uuid()) @db.Uuid
-  productId String   @map("product_id") @db.Uuid
-  storageKey String  @map("storage_key") @db.VarChar(512)
-  altText   String?  @map("alt_text") @db.VarChar(512)
-  sortOrder Int      @default(0) @map("sort_order") @db.SmallInt
-  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  id         String   @id @default(uuid()) @db.Uuid
+  productId  String   @map("product_id") @db.Uuid
+  storageKey String   @map("storage_key") @db.VarChar(512)
+  altText    String?  @map("alt_text") @db.VarChar(512)
+  sortOrder  Int      @default(0) @map("sort_order") @db.SmallInt
+  createdAt  DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
 
   product Product @relation(fields: [productId], references: [id], onDelete: Cascade, onUpdate: Cascade)
 
@@ -622,9 +636,9 @@ model ReviewStatus {
   code String @unique @db.VarChar(32)
   name String @db.VarChar(128)
 
-  reviews         Review[]
-  eventsFrom      ReviewModerationEvent[] @relation("ModerationFromStatus")
-  eventsTo        ReviewModerationEvent[] @relation("ModerationToStatus")
+  reviews    Review[]
+  eventsFrom ReviewModerationEvent[] @relation("ModerationFromStatus")
+  eventsTo   ReviewModerationEvent[] @relation("ModerationToStatus")
 
   @@map("review_statuses")
 }
@@ -888,16 +902,16 @@ model SyncRunStatus {
 }
 
 model SyncRun {
-  id                 String    @id @default(uuid()) @db.Uuid
-  syncSourceId       String    @map("sync_source_id") @db.Uuid
-  statusId           String    @map("status_id") @db.Uuid
-  startedAt          DateTime  @default(now()) @map("started_at") @db.Timestamptz(6)
-  finishedAt         DateTime? @map("finished_at") @db.Timestamptz(6)
-  recordsRead        Int       @default(0) @map("records_read")
-  recordsChanged     Int       @default(0) @map("records_changed")
-  errorCount         Int       @default(0) @map("error_count")
-  errorMessage       String?   @map("error_message") @db.VarChar(1024)
-  initiatedByUserId  String?   @map("initiated_by_user_id") @db.Uuid
+  id                String    @id @default(uuid()) @db.Uuid
+  syncSourceId      String    @map("sync_source_id") @db.Uuid
+  statusId          String    @map("status_id") @db.Uuid
+  startedAt         DateTime  @default(now()) @map("started_at") @db.Timestamptz(6)
+  finishedAt        DateTime? @map("finished_at") @db.Timestamptz(6)
+  recordsRead       Int       @default(0) @map("records_read")
+  recordsChanged    Int       @default(0) @map("records_changed")
+  errorCount        Int       @default(0) @map("error_count")
+  errorMessage      String?   @map("error_message") @db.VarChar(1024)
+  initiatedByUserId String?   @map("initiated_by_user_id") @db.Uuid
 
   syncSource      SyncSource    @relation(fields: [syncSourceId], references: [id], onDelete: Restrict, onUpdate: Cascade)
   status          SyncRunStatus @relation(fields: [statusId], references: [id], onDelete: Restrict, onUpdate: Cascade)

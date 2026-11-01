@@ -37,6 +37,12 @@ afterAll(async () => {
 });
 
 describe('Rate limit', () => {
+  it('не применяет лимит входа к публичным маршрутам', async () => {
+    for (let attempt = 0; attempt < 15; attempt += 1) {
+      const response = await app.inject({ method: 'GET', url: '/api/v1/health' });
+      expect(response.statusCode).toBe(200);
+    }
+  });
   it('отдаёт 429 после превышения лимита на /auth/login', async () => {
     const statuses: number[] = [];
 

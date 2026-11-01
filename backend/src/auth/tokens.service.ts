@@ -3,6 +3,8 @@ import { ConfigService } from '@nestjs/config';
 import { JwtService } from '@nestjs/jwt';
 import { createHash, randomBytes, randomUUID } from 'node:crypto';
 
+import type { Prisma } from '@prisma/client';
+
 import { PrismaService } from '../prisma/prisma.service';
 import {
   ACCESS_TOKEN_TTL_SECONDS,
@@ -74,11 +76,12 @@ export class TokensService {
   async issueRefreshToken(
     userId: string,
     context: { userAgent?: string; ip?: string },
+    client: Prisma.TransactionClient = this.prisma,
   ): Promise<IssuedRefreshToken> {
     const token = randomBytes(32).toString('base64url');
     const expiresAt = new Date(Date.now() + REFRESH_TOKEN_TTL_SECONDS * 1000);
 
-    const record = await this.prisma.refreshToken.create({
+    const record = await client.refreshToken.create({
       data: {
         userId,
         tokenHash: hashToken(token),

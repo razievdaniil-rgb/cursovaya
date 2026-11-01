@@ -8,10 +8,16 @@ import { expect, test } from '@playwright/test'
  * mock-адаптере) этим тестам негде взять данные.
  *
  * Локальный запуск:
- *   cd backend && npm run start:dev
+ *   cd backend && THROTTLE_DISABLED=true npm run start:dev
  *   VITE_API_URL=http://127.0.0.1:3000/api/v1 npm run build
  *   E2E_API_URL=http://127.0.0.1:3000/api/v1 \
  *     E2E_SEED_PASSWORD=<SEED_DEV_PASSWORD> npx playwright test e2e/http-api.spec.ts
+ *
+ * THROTTLE_DISABLED нужен потому, что наборы desktop и mobile идут
+ * параллельно и упираются в общий лимит 600 запросов в минуту: каждый
+ * просмотр страницы — это 4–5 обращений к API. Сам лимит проверяется
+ * backend-тестом test/throttling.e2e.spec.ts, а env.schema.ts запрещает
+ * этот флаг в production.
  */
 
 const apiUrl = process.env.E2E_API_URL

@@ -308,9 +308,55 @@ ER-диаграммы, таблицы с PK/FK/UNIQUE/CHECK, функциона�
 - [x] **9. CI, README и OpenAPI** — описания запросов построены из схем Zod,
       `backend/docs/openapi.json` экспортируется командой и проверяется в CI
       на полноту и расхождение с кодом, список эндпоинтов приведён выше.
-- [ ] 10. Полный прогон frontend и backend матрицы тестов.
+- [x] **10. Полный прогон матрицы** — все проверки выполнены на заново
+      созданной базе; результаты в таблице ниже.
 
-### Что проверено
+### Матрица проверок
+
+Прогон выполнен на базе, созданной с нуля (`DROP DATABASE` → `CREATE` →
+`migrate deploy` → `seed`), PostgreSQL 17.6, локаль `ru-RU`.
+
+| Проверка | Команда | Результат |
+| --- | --- | --- |
+| Миграции на пустой базе | `npm run db:migrate:deploy` | 3 миграции, 50 таблиц |
+| Расхождение схемы и миграций | `prisma migrate diff --exit-code` | нет |
+| Объекты схемы и поведение CHECK | `npx tsx test/verify-schema-objects.ts` | 13 проверок |
+| Идемпотентность seed и представления | `npx tsx test/verify-seed-idempotent.ts` | 19 проверок |
+| Backend typecheck | `npm run typecheck` | без ошибок |
+| Backend lint | `npm run lint` | без замечаний |
+| Backend unit (без БД) | `npm run test:unit` | 26 тестов |
+| Backend integration | `npm run test:integration` | 133 теста |
+| OpenAPI полон и не разошёлся | `npm run openapi:export` | 37 обязательных операций, 46 всего |
+| Frontend typecheck | `npm run typecheck` | без ошибок |
+| Frontend lint | `npm run lint` | без замечаний |
+| Frontend unit | `npm run test` | 26 тестов |
+| Сборка демо (mock) | `npm run build` | успешно |
+| e2e демо на mock | `npm run test:e2e` | 12 тестов (desktop и mobile) |
+| Сборка через API | `VITE_API_URL=... npm run build` | успешно |
+| e2e интерфейса через HTTP API | `npm run test:e2e:http` | 24 теста (desktop и mobile) |
+
+Итого 221 автоматический тест плюс проверки схемы, seed и OpenAPI.
+
+Прогон e2e через HTTP API выполняется против API с `THROTTLE_DISABLED=true`:
+наборы desktop и mobile идут параллельно и упираются в общий лимит 600
+запросов в минуту. Сам лимит проверяется отдельным backend-тестом, а
+`env.schema.ts` запрещает этот флаг в production.
+
+### Что не проверено
+
+- **Docker Compose не запускался.** На машине разработки Docker Desktop не
+  стартует: в WSL не установлено ни одного дистрибутива. Схема, seed и API
+  проверены на портативной сборке PostgreSQL 17.6
+  ([инструкция](backend/docs/local-postgres-without-docker.md)), а
+  `docker-compose.yml` и `backend/Dockerfile` написаны, но на практике не
+  поднимались. Их стоит проверить на машине с рабочим Docker до того, как
+  полагаться на команду `docker compose up`.
+- **Схемы успешных ответов в OpenAPI** отдельными моделями не объявлены;
+  форма ответа описана в общем виде в описании документа.
+- **Публичного размещения API нет**, поэтому демо на GitHub Pages продолжает
+  работать на mock-адаптере, а не через HTTP.
+
+### Что проверено ранее по этапам
 
 Проверка миграций на **пустой** PostgreSQL 17.6 (локально) и в CI
 (`.github/workflows/backend-ci.yml`, отдельный workflow — публикация на

@@ -4,7 +4,10 @@ name: Backend CI
 # публикация на GitHub Pages продолжают работать независимо от backend.
 on:
   push:
-    branches: [main]
+    # Рабочие ветки тоже проверяются: иначе до открытия pull request проверки
+    # не запускаются вовсе. Публикация на GitHub Pages остаётся только для
+    # main — за неё отвечает отдельный workflow deploy-pages.yml.
+    branches: [main, 'feat/**', 'fix/**']
     paths:
       - 'backend/**'
       - 'src/**'
@@ -187,6 +190,10 @@ jobs:
       FRONTEND_ORIGINS: http://127.0.0.1:4173
       SEED_DEV_PASSWORD: ci-only-password-2026
       PORT: 3000
+      # Наборы desktop и mobile идут параллельно и на общий лимит 600
+      # запросов в минуту упираются. Флаг существует ровно для таких
+      # прогонов, а env.schema.ts запрещает его в production.
+      THROTTLE_DISABLED: 'true'
 
     steps:
       - uses: actions/checkout@v4

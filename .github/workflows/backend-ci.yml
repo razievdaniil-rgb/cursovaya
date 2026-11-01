@@ -27,16 +27,16 @@ on:
       - '.github/workflows/backend-ci.yml'
   workflow_dispatch:
 
-defaults:
-  run:
-    working-directory: backend
-
 jobs:
   # Главная проверка этапа: схема применяется на ЧИСТОЙ базе одной командой,
   # после чего идемпотентный seed выполняется дважды с одинаковым результатом.
   migrations:
     name: Миграции и seed на пустом PostgreSQL
     runs-on: ubuntu-latest
+
+    defaults:
+      run:
+        working-directory: backend
 
     services:
       postgres:
@@ -96,6 +96,10 @@ jobs:
   checks:
     name: Типы, линтер и тесты
     runs-on: ubuntu-latest
+
+    defaults:
+      run:
+        working-directory: backend
 
     services:
       postgres:
@@ -195,6 +199,10 @@ jobs:
       # прогонов, а env.schema.ts запрещает его в production.
       THROTTLE_DISABLED: 'true'
 
+    # У этой джобы намеренно нет defaults.run.working-directory: шаги
+    # frontend должны выполняться из корня репозитория, а backend-шаги
+    # указывают каталог явно. Общий default на уровне workflow приводил к
+    # тому, что frontend собирался внутри backend/, а путь до API удваивался.
     steps:
       - uses: actions/checkout@v4
 

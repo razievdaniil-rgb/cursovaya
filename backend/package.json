@@ -12,14 +12,16 @@
     "lint": "eslint src test prisma --ext .ts",
     "test": "vitest run",
     "test:watch": "vitest",
-    "test:e2e": "vitest run test/auth.e2e.spec.ts test/throttling.e2e.spec.ts",
+    "test:e2e": "vitest run --config vitest.integration.config.ts",
     "db:generate": "prisma generate",
     "db:migrate": "prisma migrate dev",
     "db:migrate:deploy": "prisma migrate deploy",
     "db:migrate:reset": "prisma migrate reset --force",
     "db:seed": "tsx prisma/seed.ts",
     "db:setup": "prisma migrate deploy && prisma generate && tsx prisma/seed.ts",
-    "db:refresh-views": "tsx prisma/refresh-views.ts"
+    "db:refresh-views": "tsx prisma/refresh-views.ts",
+    "test:unit": "vitest run --config vitest.unit.config.ts",
+    "test:integration": "vitest run --config vitest.integration.config.ts"
   },
   "prisma": {
     "seed": "tsx prisma/seed.ts"

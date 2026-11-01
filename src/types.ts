@@ -82,6 +82,9 @@ export interface ProblemProduct {
     criticalReviews: boolean
     withoutActiveOffers: boolean
   }
+  averageRating: number | null
+  criticalReviewCount: number
+  activeOfferCount: number
 }
 
 export interface SyncStatus {
@@ -124,6 +127,7 @@ export interface CatalogFilters {
   riskClasses: { id: string; code: string; name: string; productCount: number }[]
   registryStatuses: { id: string; code: string; name: string; productCount: number }[]
   originTypes: { id: string; code: string; name: string; productCount: number }[]
+  manufacturers: { id: string; name: string; country: string; productCount: number }[]
   price: { currency: string; min: number | null; max: number | null }
 }
 

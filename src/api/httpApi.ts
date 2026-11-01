@@ -57,10 +57,6 @@ export class ApiError extends Error {
   }
 }
 
-/** Access token в памяти: перезагрузка страницы его теряет — это осознанно. */
-let accessToken: string | null = null
-let refreshPromise: Promise<boolean> | null = null
-
 /**
  * Признак того, что сессия, возможно, существует.
  *
@@ -197,6 +193,16 @@ interface ApiReview {
 
 export function createHttpApi(baseUrl: string): ApiClient {
   const root = baseUrl.replace(/\/+$/, '')
+
+  /**
+   * Состояние сессии принадлежит конкретному клиенту, а не модулю.
+   *
+   * Access token живёт только в памяти: перезагрузка страницы его теряет, и
+   * сессия восстанавливается через refresh-cookie. На уровне модуля эти
+   * переменные делили бы между собой все созданные клиенты.
+   */
+  let accessToken: string | null = null
+  let refreshPromise: Promise<boolean> | null = null
 
   async function rawRequest(path: string, init: RequestInit): Promise<Response> {
     return fetch(`${root}${path}`, {
@@ -388,6 +394,32 @@ export function createHttpApi(baseUrl: string): ApiClient {
       verified: user.organizations.some((organization) => organization.verified),
       organizationId: user.organizations[0]?.id ?? null,
     }
+  }
+
+  const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
+
+  /** Из подписи периода («2020–2026», «2026») берётся начальный год. */
+  function resolvePeriod(value?: string): string | undefined {
+    return value?.match(/\d{4}/)?.[0]
+  }
+
+  /** Названия категорий сопоставляются с идентификаторами один раз. */
+  let categoryIdByName: Map<string, string> | null = null
+
+  async function resolveCategoryId(value?: string): Promise<string | undefined> {
+    if (!value) return undefined
+    if (UUID_PATTERN.test(value)) return value
+    // «Все категории» означает отсутствие фильтра.
+    if (value.startsWith('Все')) return undefined
+
+    if (!categoryIdByName) {
+      const filters = await request<CatalogFilters>('/catalog/filters')
+      categoryIdByName = new Map(
+        filters.categories.map((category) => [category.name, category.id]),
+      )
+    }
+
+    return categoryIdByName.get(value)
   }
 
   function buildCatalogParams(query: CatalogQuery): URLSearchParams {
@@ -629,8 +661,15 @@ export function createHttpApi(baseUrl: string): ApiClient {
 
     async getAnalytics(period?: string, category?: string) {
       const params = new URLSearchParams()
-      if (period) params.set('period', period)
-      if (category) params.set('categoryId', category)
+
+      // Интерфейс передаёт подписи выпадающих списков («2020–2026»,
+      // «Все категории»), а API ждёт год и UUID категории. Приведение —
+      // задача адаптера, как и для стран и классов риска.
+      const resolvedPeriod = resolvePeriod(period)
+      if (resolvedPeriod) params.set('period', resolvedPeriod)
+
+      const categoryId = await resolveCategoryId(category)
+      if (categoryId) params.set('categoryId', categoryId)
 
       const snapshot = await request<{
         refreshedAt: string | null

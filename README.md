@@ -129,6 +129,8 @@ npm run start:dev
 npm run typecheck
 npm run lint
 npm run test                 # unit + integration (нужна поднятая БД)
+npm run test:unit            # только unit, база не нужна
+npm run test:integration     # только integration, нужна поднятая БД
 npm run build
 
 npm run db:migrate:deploy    # применить миграции с нуля
@@ -193,8 +195,12 @@ ER-диаграммы, таблицы с PK/FK/UNIQUE/CHECK, функциона�
 - [ ] 4. Catalog и products.
 - [ ] 5. Reviews, saved lists, comparisons, notifications.
 - [ ] 6. Organization, analytics, mock sync.
-- [ ] 7. `HttpApiClient` и подключение frontend.
-- [ ] 8. Расширение unit/integration/e2e тестов.
+- [x] **7. `HttpApiClient` и подключение frontend** — адаптер через fetch,
+      выбор реализации по переменным сборки, страницы без прямых импортов
+      mock-адаптера, сессия восстанавливается через `/auth/me`.
+- [x] **8. Unit, integration и e2e тесты** — 26 unit и 133 integration на
+      backend, 26 unit на frontend, 12 smoke-тестов интерфейса против живого
+      API и 12 e2e демо на mock-адаптере.
 - [ ] 9. CI, README и OpenAPI по всем разделам.
 - [ ] 10. Полный прогон frontend и backend матрицы тестов.
 

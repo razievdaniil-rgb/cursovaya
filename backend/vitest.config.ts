@@ -1,27 +1,17 @@
-import swc from 'unplugin-swc';
 import { defineConfig } from 'vitest/config';
 
+import { sharedTestOptions, swcPlugin } from './vitest.shared';
+
+/**
+ * Полный прогон: unit и integration вместе. Integration-тестам нужна
+ * поднятая PostgreSQL с применёнными миграциями и seed.
+ */
 export default defineConfig({
   test: {
-    globals: true,
-    environment: 'node',
+    ...sharedTestOptions,
     include: ['test/**/*.spec.ts', 'src/**/*.spec.ts'],
-    // Integration-тесты делят одну базу, поэтому выполняются последовательно.
+    // Integration-тесты делят одну базу, поэтому файлы идут последовательно.
     fileParallelism: false,
-    testTimeout: 30_000,
-    hookTimeout: 60_000,
   },
-  plugins: [
-    // Vitest по умолчанию трансформирует через esbuild, который не умеет
-    // emitDecoratorMetadata. Без неё NestJS не видит типы зависимостей и
-    // внедряет undefined. SWC эту метаданную генерирует.
-    swc.vite({
-      module: { type: 'es6' },
-      jsc: {
-        target: 'es2022',
-        parser: { syntax: 'typescript', decorators: true },
-        transform: { decoratorMetadata: true, legacyDecorator: true },
-      },
-    }),
-  ],
+  plugins: [swcPlugin],
 });

@@ -7,11 +7,19 @@ on:
     branches: [main]
     paths:
       - 'backend/**'
+      - 'src/**'
+      - 'e2e/**'
+      - 'package.json'
+      - 'package-lock.json'
       - 'docker-compose.yml'
       - '.github/workflows/backend-ci.yml'
   pull_request:
     paths:
       - 'backend/**'
+      - 'src/**'
+      - 'e2e/**'
+      - 'package.json'
+      - 'package-lock.json'
       - 'docker-compose.yml'
       - '.github/workflows/backend-ci.yml'
   workflow_dispatch:
@@ -134,5 +142,94 @@ jobs:
       - name: Lint
         run: npm run lint
 
-      - name: Unit и integration тесты
-        run: npm run test
+      - name: Unit-тесты
+        # База для них не нужна, но прогоняются вместе с остальными.
+        run: npm run test:unit
+
+      - name: Integration-тесты
+        run: npm run test:integration
+
+  # Проверка связки frontend ↔ API: интерфейс собирается с VITE_API_URL и
+  # работает против поднятого backend с применённым seed. Демо на
+  # mock-адаптере проверяется отдельно в e2e без E2E_API_URL.
+  frontend-http:
+    name: Frontend через HTTP API
+    runs-on: ubuntu-latest
+
+    services:
+      postgres:
+        image: postgres:17
+        env:
+          POSTGRES_DB: medizdeliya_e2e
+          POSTGRES_USER: medizdeliya
+          POSTGRES_PASSWORD: medizdeliya_ci
+          POSTGRES_INITDB_ARGS: "--locale=C.UTF-8 --encoding=UTF8"
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U medizdeliya -d medizdeliya_e2e"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 20
+
+    env:
+      DATABASE_URL: postgresql://medizdeliya:medizdeliya_ci@localhost:5432/medizdeliya_e2e?schema=public
+      JWT_ACCESS_SECRET: ci_only_access_secret_at_least_32_chars_long
+      JWT_REFRESH_SECRET: ci_only_refresh_secret_at_least_32_chars_long
+      FRONTEND_ORIGINS: http://127.0.0.1:4173
+      SEED_DEV_PASSWORD: ci-only-password-2026
+      PORT: 3000
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Установить зависимости backend
+        working-directory: backend
+        run: npm ci
+
+      - name: Поднять схему и данные
+        working-directory: backend
+        run: npm run db:migrate:deploy && npm run db:generate && npm run db:seed
+
+      - name: Собрать и запустить API
+        working-directory: backend
+        run: |
+          npm run build
+          node dist/main.js &
+          for i in $(seq 1 40); do
+            if curl -sf http://127.0.0.1:3000/api/v1/health > /dev/null; then
+              echo "API поднят"; exit 0
+            fi
+            sleep 2
+          done
+          echo "API не поднялся"; exit 1
+
+      - name: Установить зависимости frontend
+        run: npm ci
+
+      - name: Собрать frontend с адресом API
+        run: npm run build
+        env:
+          VITE_API_URL: http://127.0.0.1:3000/api/v1
+
+      - name: Установить браузер Playwright
+        run: npx playwright install --with-deps chrome
+
+      - name: Smoke-тесты интерфейса через HTTP API
+        run: npx playwright test e2e/http-api.spec.ts --project=desktop
+        env:
+          E2E_API_URL: http://127.0.0.1:3000/api/v1
+          E2E_SEED_PASSWORD: ci-only-password-2026
+
+      - uses: actions/upload-artifact@v4
+        if: failure()
+        with:
+          name: playwright-http-report
+          path: |
+            playwright-report
+            test-results
+          retention-days: 7

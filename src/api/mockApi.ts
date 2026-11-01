@@ -143,6 +143,12 @@ export const mockApi: ApiClient = {
         { id: 'domestic', code: 'domestic', name: 'Россия', productCount: products.filter((p) => p.origin === 'Россия').length },
         { id: 'imported', code: 'imported', name: 'Импорт', productCount: products.filter((p) => p.origin === 'Импорт').length },
       ],
+      manufacturers: [...new Map(products.map((p) => [p.manufacturer.id, p])).values()].map((p) => ({
+        id: p.manufacturer.id,
+        name: p.manufacturer.name,
+        country: p.manufacturer.country,
+        productCount: products.filter((item) => item.manufacturer.id === p.manufacturer.id).length,
+      })),
       price: {
         currency: 'RUB',
         min: Math.min(...products.map((p) => p.priceMin)),
@@ -237,6 +243,9 @@ export const mockApi: ApiClient = {
           criticalReviews: false,
           withoutActiveOffers: false,
         },
+        averageRating: product.rating,
+        criticalReviewCount: 0,
+        activeOfferCount: 1,
       }))
   },
 

@@ -1,5 +1,5 @@
 import { Module } from '@nestjs/common';
-import { ConfigModule } from '@nestjs/config';
+import { ConfigModule, ConfigService } from '@nestjs/config';
 import { APP_GUARD } from '@nestjs/core';
 import { ThrottlerModule } from '@nestjs/throttler';
 
@@ -28,11 +28,18 @@ import { PrismaModule } from './prisma/prisma.module';
     }),
     // Общий лимит плюс именованный профиль `auth`, который контроллер
     // авторизации ужесточает декоратором @Throttle на каждом маршруте.
-    ThrottlerModule.forRoot({
-      throttlers: [
-        { name: 'default', limit: 120, ttl: 60_000 },
-        { name: 'auth', limit: 10, ttl: 60_000 },
-      ],
+    ThrottlerModule.forRootAsync({
+      inject: [ConfigService],
+      useFactory: (config: ConfigService) => ({
+        throttlers: [
+          {
+            name: 'default',
+            limit: config.getOrThrow<number>('THROTTLE_DEFAULT_LIMIT'),
+            ttl: 60_000,
+          },
+          { name: 'auth', limit: 10, ttl: 60_000 },
+        ],
+      }),
     }),
     PrismaModule,
     AuthModule,
